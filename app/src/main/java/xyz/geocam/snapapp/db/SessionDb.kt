@@ -54,6 +54,29 @@ class SessionDb(private val db: SQLiteDatabase) {
         return cursor.use { if (it.moveToFirst()) it.getInt(0) else 0 }
     }
 
+    fun getInfo(): SessionInfo {
+        val shotIds = mutableListOf<Long>()
+        var firstLat: Double? = null
+        var firstLon: Double? = null
+        db.rawQuery("SELECT id, lat, lon FROM shots ORDER BY captured_at ASC", null).use { c ->
+            while (c.moveToNext()) {
+                shotIds.add(c.getLong(0))
+                if (firstLat == null && !c.isNull(1)) {
+                    firstLat = c.getDouble(1)
+                    firstLon = if (!c.isNull(2)) c.getDouble(2) else null
+                }
+            }
+        }
+        return SessionInfo(shotIds.size, firstLat, firstLon, shotIds)
+    }
+
+    fun loadThumbnail(shotId: Long): ByteArray? {
+        db.rawQuery(
+            "SELECT jpeg FROM burst_frames WHERE shot_id=? AND frame_index=0",
+            arrayOf(shotId.toString())
+        ).use { c -> return if (c.moveToFirst()) c.getBlob(0) else null }
+    }
+
     fun setMeta(key: String, value: String) {
         db.execSQL("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", arrayOf(key, value))
     }
@@ -61,6 +84,11 @@ class SessionDb(private val db: SQLiteDatabase) {
     fun close() = db.close()
 
     companion object {
+        fun openReadOnly(file: File): SessionDb {
+            val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+            return SessionDb(db)
+        }
+
         fun create(file: File): SessionDb {
             val db = SQLiteDatabase.openOrCreateDatabase(file, null)
             db.execSQL("""

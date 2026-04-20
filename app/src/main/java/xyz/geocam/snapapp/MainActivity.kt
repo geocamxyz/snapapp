@@ -32,6 +32,7 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
 
         adapter = SessionAdapter(
+            scope = lifecycleScope,
             onUpload = ::uploadSession,
             onShare = ::shareSession,
             onView = { url -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
