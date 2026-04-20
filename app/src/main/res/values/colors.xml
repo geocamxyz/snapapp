@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#1976D2</color>
+    <color name="colorPrimaryDark">#0D47A1</color>
+    <color name="colorAccent">#FF5722</color>
+    <color name="status_uploaded">#4CAF50</color>
+    <color name="status_pending">#9E9E9E</color>
+    <color name="status_error">#F44336</color>
+    <color name="status_uploading">#2196F3</color>
+    <color name="ic_launcher_background">#1976D2</color>
+</resources>
