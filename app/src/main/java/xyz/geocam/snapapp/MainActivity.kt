@@ -35,7 +35,8 @@ class MainActivity : AppCompatActivity() {
             scope = lifecycleScope,
             onUpload = ::uploadSession,
             onShare = ::shareSession,
-            onView = { url -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            onView = { url -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) },
+            onDelete = ::deleteSession
         )
         binding.recyclerView.adapter = adapter
 
@@ -92,6 +93,23 @@ class MainActivity : AppCompatActivity() {
             },
             session.name
         ))
+    }
+
+    private fun deleteSession(session: SessionFile) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Delete session")
+            .setMessage("Delete \"${session.name.removeSuffix(".db")}\"? This cannot be undone.")
+            .setPositiveButton("Delete") { _, _ ->
+                lifecycleScope.launch(Dispatchers.IO) {
+                    File(session.path).delete()
+                    getSharedPreferences("upload_status", MODE_PRIVATE).edit().remove(session.name).apply()
+                    getSharedPreferences("project_urls", MODE_PRIVATE).edit().remove(session.name).apply()
+                    getSharedPreferences("upload_ids", MODE_PRIVATE).edit().remove(session.name).apply()
+                    withContext(Dispatchers.Main) { loadSessions() }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun uploadSession(session: SessionFile) {

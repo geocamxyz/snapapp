@@ -5,10 +5,10 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -29,13 +29,16 @@ class SessionAdapter(
     private val scope: CoroutineScope,
     private val onUpload: (SessionFile) -> Unit,
     private val onShare: (SessionFile) -> Unit,
-    private val onView: (String) -> Unit
+    private val onView: (String) -> Unit,
+    private val onDelete: (SessionFile) -> Unit
 ) : ListAdapter<SessionFile, SessionAdapter.ViewHolder>(DIFF) {
 
     private val statusOverrides = mutableMapOf<String, UploadStatus>()
     private val progressOverrides = mutableMapOf<String, Int>()
     private val projectUrlOverrides = mutableMapOf<String, String>()
-    private val thumbnailCache = HashMap<Long, Bitmap?>()
+    // Cache key = "$sessionPath:$shotId" to avoid cross-session collisions
+    private val thumbnailCache = HashMap<String, Bitmap?>()
+    private val deleteMode = mutableSetOf<String>()
 
     fun updateStatus(name: String, status: UploadStatus) {
         statusOverrides[name] = status
@@ -71,15 +74,36 @@ class SessionAdapter(
             b.imageStatus.setImageResource(status.iconRes())
             b.imageStatus.contentDescription = status.name
 
-            val uploading = status == UploadStatus.UPLOADING
+            val inDelete = item.name in deleteMode
+            val uploading = !inDelete && status == UploadStatus.UPLOADING
             val pct = progressOverrides[item.name]
-            b.buttonUpload.isEnabled = !uploading
-            b.buttonUpload.text = when {
-                uploading && pct != null -> "$pct%"
-                uploading -> "…"
-                else -> itemView.context.getString(R.string.upload)
+
+            if (inDelete) {
+                b.buttonUpload.text = itemView.context.getString(R.string.delete)
+                b.buttonUpload.isEnabled = true
+                b.buttonUpload.setTextColor(ContextCompat.getColor(itemView.context, R.color.status_error))
+                b.buttonUpload.setOnClickListener {
+                    deleteMode.remove(item.name)
+                    onDelete(item)
+                }
+            } else {
+                b.buttonUpload.setTextColor(ContextCompat.getColor(itemView.context, R.color.colorPrimary))
+                b.buttonUpload.isEnabled = !uploading
+                b.buttonUpload.text = when {
+                    uploading && pct != null -> "$pct%"
+                    uploading -> "…"
+                    else -> itemView.context.getString(R.string.upload)
+                }
+                b.buttonUpload.setOnClickListener { onUpload(item) }
             }
-            b.buttonUpload.setOnClickListener { onUpload(item) }
+
+            b.root.setOnLongClickListener {
+                if (item.name in deleteMode) deleteMode.remove(item.name)
+                else deleteMode.add(item.name)
+                notifyItemForName(item.name)
+                true
+            }
+
             b.buttonShare.setOnClickListener { onShare(item) }
 
             val hasLocation = item.firstLat != null && item.firstLon != null
@@ -93,7 +117,7 @@ class SessionAdapter(
             }
 
             val url = projectUrlOverrides[item.name] ?: item.projectUrl
-            b.textViewResults.visibility = if (url != null) View.VISIBLE else View.GONE
+            b.textViewResults.visibility = if (url != null) android.view.View.VISIBLE else android.view.View.GONE
             b.textViewResults.setOnClickListener { url?.let { onView(it) } }
 
             bindThumbnails(item)
@@ -108,36 +132,50 @@ class SessionAdapter(
             val sizePx = (72 * ctx.resources.displayMetrics.density).toInt()
             val gapPx = (4 * ctx.resources.displayMetrics.density).toInt()
 
-            item.shotIds.forEach { shotId ->
+            // Build ImageViews tagged with their cache keys
+            val entries = item.shotIds.map { shotId ->
+                val key = cacheKey(item.path, shotId)
                 val thumb = ImageView(ctx).apply {
                     layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply { rightMargin = gapPx }
                     scaleType = ImageView.ScaleType.CENTER_CROP
-                    setBackgroundColor(0xFF222222.toInt())
-                    tag = shotId
+                    setBackgroundColor(0xFF2A2A2A.toInt())
+                    tag = key
                 }
                 strip.addView(thumb)
-                loadThumbnail(thumb, shotId, item.path)
+                // Apply from cache immediately if present
+                if (thumbnailCache.containsKey(key)) {
+                    thumb.setImageBitmap(thumbnailCache[key])
+                }
+                key to shotId
             }
-        }
-    }
 
-    private fun loadThumbnail(view: ImageView, shotId: Long, sessionPath: String) {
-        val cached = thumbnailCache[shotId]
-        if (thumbnailCache.containsKey(shotId)) {
-            view.setImageBitmap(cached)
-            return
-        }
-        scope.launch {
-            val bitmap = withContext(Dispatchers.IO) {
-                try {
-                    val db = SessionDb.openReadOnly(File(sessionPath))
-                    val bytes = db.loadThumbnail(shotId)
-                    db.close()
-                    bytes?.let { decodeThumbnail(it) }
-                } catch (_: Exception) { null }
+            val uncachedIds = entries
+                .filter { (key, _) -> !thumbnailCache.containsKey(key) }
+                .map { (_, shotId) -> shotId }
+
+            if (uncachedIds.isEmpty()) return
+
+            // Load all uncached thumbnails from this session's DB in one pass
+            scope.launch {
+                val loaded = withContext(Dispatchers.IO) {
+                    try {
+                        SessionDb.openReadOnly(File(item.path)).use { db ->
+                            uncachedIds.associateWith { shotId ->
+                                db.loadThumbnail(shotId)?.let { bytes ->
+                                    decodeThumbnail(bytes)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        emptyMap()
+                    }
+                }
+                loaded.forEach { (shotId, bitmap) ->
+                    val key = cacheKey(item.path, shotId)
+                    thumbnailCache[key] = bitmap
+                    strip.findViewWithTag<ImageView>(key)?.setImageBitmap(bitmap)
+                }
             }
-            thumbnailCache[shotId] = bitmap
-            if (view.tag == shotId) view.setImageBitmap(bitmap)
         }
     }
 
@@ -153,17 +191,13 @@ class SessionAdapter(
             override fun areContentsTheSame(a: SessionFile, b: SessionFile) = a == b
         }
 
-        private fun decodeThumbnail(bytes: ByteArray): Bitmap? {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-            var sample = 1
-            val target = 256
-            while (bounds.outWidth / (sample * 2) >= target && bounds.outHeight / (sample * 2) >= target) {
-                sample *= 2
-            }
-            return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
-                inSampleSize = sample
-            })
+        private fun cacheKey(sessionPath: String, shotId: Long) = "$sessionPath:$shotId"
+
+        private fun decodeThumbnail(bytes: ByteArray): Bitmap? = try {
+            val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        } catch (e: Exception) {
+            null
         }
 
         private fun formatSize(bytes: Long) = when {

@@ -4,7 +4,7 @@ import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import java.io.File
 
-class SessionDb(private val db: SQLiteDatabase) {
+class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
 
     fun insertShot(
         capturedAt: Long,
