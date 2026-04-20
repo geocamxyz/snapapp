@@ -22,12 +22,14 @@ class SettingsActivity : AppCompatActivity() {
         binding.editUpdateUrl.setText(
             prefs.getString("update_url", UpdateChecker.DEFAULT_RELEASES_URL)
         )
+        binding.switchBurst.isChecked = prefs.getBoolean("burst_enabled", true)
 
         binding.buttonSave.setOnClickListener {
             prefs.edit()
                 .putString("upload_url", binding.editUploadUrl.text.toString().trim())
                 .putString("update_url", binding.editUpdateUrl.text.toString().trim()
                     .ifBlank { UpdateChecker.DEFAULT_RELEASES_URL })
+                .putBoolean("burst_enabled", binding.switchBurst.isChecked)
                 .apply()
             Toast.makeText(this, "Settings saved", Toast.LENGTH_SHORT).show()
             finish()

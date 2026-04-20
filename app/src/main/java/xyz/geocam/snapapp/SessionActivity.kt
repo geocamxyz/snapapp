@@ -241,10 +241,14 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 val ts = System.currentTimeMillis()
                 val tmp = cacheDir
 
-                // Burst at full zoom
+                // Burst (or single) frame at full zoom
+                val burstEnabled = getSharedPreferences("settings", MODE_PRIVATE)
+                    .getBoolean("burst_enabled", true)
+                val frameCount = if (burstEnabled) BURST_COUNT else 1
                 val burstFrames = mutableListOf<ByteArray>()
-                repeat(BURST_COUNT) { i ->
-                    binding.textCaptureStatus.text = "Burst ${i + 1}/$BURST_COUNT…"
+                repeat(frameCount) { i ->
+                    binding.textCaptureStatus.text =
+                        if (burstEnabled) "Burst ${i + 1}/$frameCount…" else "Capturing zoom…"
                     val f = File(tmp, "snap_burst_$i.jpg")
                     takePicture(ic, f)
                     burstFrames.add(f.readBytes().also { f.delete() })
