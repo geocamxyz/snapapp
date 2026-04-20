@@ -115,8 +115,11 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
             override fun onStopTrackingTouch(seek: SeekBar) { sliderTracking = false }
         })
 
-        binding.buttonShutter.setOnClickListener {
-            if (!capturing) captureShot()
+        binding.buttonOneShot.setOnClickListener {
+            if (!capturing) captureShot(burst = false)
+        }
+        binding.buttonBurst.setOnClickListener {
+            if (!capturing) captureShot(burst = true)
         }
 
         binding.buttonCloseSession.setOnClickListener {
@@ -187,8 +190,11 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
             val preview = Preview.Builder().build().also {
                 it.surfaceProvider = binding.viewFinder.surfaceProvider
             }
+            val quality = getSharedPreferences("settings", MODE_PRIVATE)
+                .getInt("jpeg_quality", SettingsActivity.DEFAULT_JPEG_QUALITY)
             imageCapture = ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                .setJpegQuality(quality)
                 .build()
             try {
                 provider.unbindAll()
@@ -217,13 +223,14 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private fun captureShot() {
+    private fun captureShot(burst: Boolean) {
         val cam = camera ?: return
         val ic = imageCapture ?: return
 
         lifecycleScope.launch {
             capturing = true
-            binding.buttonShutter.isEnabled = false
+            binding.buttonOneShot.isEnabled = false
+            binding.buttonBurst.isEnabled = false
             binding.progressCapture.visibility = View.VISIBLE
 
             try {
@@ -241,14 +248,12 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 val ts = System.currentTimeMillis()
                 val tmp = cacheDir
 
-                // Burst (or single) frame at full zoom
-                val burstEnabled = getSharedPreferences("settings", MODE_PRIVATE)
-                    .getBoolean("burst_enabled", true)
-                val frameCount = if (burstEnabled) BURST_COUNT else 1
+                // Burst or single frame at full zoom
+                val frameCount = if (burst) BURST_COUNT else 1
                 val burstFrames = mutableListOf<ByteArray>()
                 repeat(frameCount) { i ->
                     binding.textCaptureStatus.text =
-                        if (burstEnabled) "Burst ${i + 1}/$frameCount…" else "Capturing zoom…"
+                        if (burst) "Burst ${i + 1}/$frameCount…" else "Capturing zoom…"
                     val f = File(tmp, "snap_burst_$i.jpg")
                     takePicture(ic, f)
                     burstFrames.add(f.readBytes().also { f.delete() })
@@ -293,7 +298,8 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
             } finally {
                 binding.progressCapture.visibility = View.GONE
                 binding.textCaptureStatus.text = ""
-                binding.buttonShutter.isEnabled = true
+                binding.buttonOneShot.isEnabled = true
+                binding.buttonBurst.isEnabled = true
                 capturing = false
             }
         }

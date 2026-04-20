@@ -9,5 +9,7 @@
     <string name="save">Save</string>
     <string name="upload">Upload</string>
     <string name="check_updates">Check for updates</string>
-    <string name="burst_mode">Burst mode (5 frames at zoom before pulling back)</string>
+    <string name="one_shot">One Shot</string>
+    <string name="burst">Burst</string>
+    <string name="jpeg_quality">JPEG quality</string>
 </resources>

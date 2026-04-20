@@ -54,13 +54,21 @@
 
             </com.google.android.material.textfield.TextInputLayout>
 
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/switchBurst"
+            <TextView
+                android:id="@+id/textQualityLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+            <SeekBar
+                android:id="@+id/seekQuality"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="24dp"
-                android:text="@string/burst_mode"
-                android:checked="true" />
+                android:min="50"
+                android:max="100"
+                android:progress="85" />
 
             <Button
                 android:id="@+id/buttonSave"

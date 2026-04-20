@@ -1,6 +1,7 @@
 package xyz.geocam.snapapp
 
 import android.os.Bundle
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import xyz.geocam.snapapp.databinding.ActivitySettingsBinding
@@ -22,22 +23,41 @@ class SettingsActivity : AppCompatActivity() {
         binding.editUpdateUrl.setText(
             prefs.getString("update_url", UpdateChecker.DEFAULT_RELEASES_URL)
         )
-        binding.switchBurst.isChecked = prefs.getBoolean("burst_enabled", true)
+
+        val savedQuality = prefs.getInt("jpeg_quality", DEFAULT_JPEG_QUALITY)
+        binding.seekQuality.progress = savedQuality
+        updateQualityLabel(savedQuality)
+
+        binding.seekQuality.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seek: SeekBar, progress: Int, fromUser: Boolean) {
+                updateQualityLabel(progress)
+            }
+            override fun onStartTrackingTouch(seek: SeekBar) {}
+            override fun onStopTrackingTouch(seek: SeekBar) {}
+        })
 
         binding.buttonSave.setOnClickListener {
             prefs.edit()
                 .putString("upload_url", binding.editUploadUrl.text.toString().trim())
                 .putString("update_url", binding.editUpdateUrl.text.toString().trim()
                     .ifBlank { UpdateChecker.DEFAULT_RELEASES_URL })
-                .putBoolean("burst_enabled", binding.switchBurst.isChecked)
+                .putInt("jpeg_quality", binding.seekQuality.progress)
                 .apply()
             Toast.makeText(this, "Settings saved", Toast.LENGTH_SHORT).show()
             finish()
         }
     }
 
+    private fun updateQualityLabel(quality: Int) {
+        binding.textQualityLabel.text = getString(R.string.jpeg_quality) + ": $quality%"
+    }
+
     override fun onSupportNavigateUp(): Boolean {
         finish()
         return true
+    }
+
+    companion object {
+        const val DEFAULT_JPEG_QUALITY = 85
     }
 }
