@@ -59,6 +59,10 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private var currentBearing = Float.NaN
     private var bearingAccuracyDeg = Float.NaN
 
+    companion object {
+        const val BURST_COUNT = 5
+    }
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
@@ -237,9 +241,14 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 val ts = System.currentTimeMillis()
                 val tmp = cacheDir
 
-                binding.textCaptureStatus.text = "Capturing zoom…"
-                val zoomFile = File(tmp, "snap_zoom.jpg")
-                takePicture(ic, zoomFile)
+                // Burst at full zoom
+                val burstFrames = mutableListOf<ByteArray>()
+                repeat(BURST_COUNT) { i ->
+                    binding.textCaptureStatus.text = "Burst ${i + 1}/$BURST_COUNT…"
+                    val f = File(tmp, "snap_burst_$i.jpg")
+                    takePicture(ic, f)
+                    burstFrames.add(f.readBytes().also { f.delete() })
+                }
 
                 cam.cameraControl.setZoomRatio(halfZoom).await()
                 delay(600)
@@ -255,8 +264,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
 
                 cam.cameraControl.setZoomRatio(captureZoom).await()
 
-                val zoomBytes = zoomFile.readBytes().also { zoomFile.delete() }
-                val midBytes  = midFile.readBytes().also  { midFile.delete()  }
+                val midBytes  = midFile.readBytes().also { midFile.delete() }
                 val wideBytes = wideFile.readBytes().also { wideFile.delete() }
 
                 val loc = locationHelper.current ?: locationHelper.getLastKnown()
@@ -269,7 +277,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                     accuracyM = loc?.accuracyM, altitudeM = loc?.altitudeM,
                     locationSource = loc?.source, locationTimeMs = loc?.timeMs,
                     bearingDeg = bearing, bearingAccuracyDeg = bearingAcc,
-                    zoomJpeg = zoomBytes,
+                    burstFrames = burstFrames,
                     midJpeg = midBytes,
                     wideJpeg = wideBytes
                 )

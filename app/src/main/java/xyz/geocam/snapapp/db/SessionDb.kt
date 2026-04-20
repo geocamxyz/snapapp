@@ -12,23 +12,41 @@ class SessionDb(private val db: SQLiteDatabase) {
         accuracyM: Float?, altitudeM: Double?,
         locationSource: String?, locationTimeMs: Long?,
         bearingDeg: Float?, bearingAccuracyDeg: Float?,
-        zoomJpeg: ByteArray, midJpeg: ByteArray, wideJpeg: ByteArray
+        burstFrames: List<ByteArray>,
+        midJpeg: ByteArray,
+        wideJpeg: ByteArray
     ): Long {
-        val cv = ContentValues().apply {
-            put("captured_at", capturedAt)
-            if (lat != null) put("lat", lat) else putNull("lat")
-            if (lon != null) put("lon", lon) else putNull("lon")
-            if (accuracyM != null) put("accuracy_m", accuracyM) else putNull("accuracy_m")
-            if (altitudeM != null) put("altitude_m", altitudeM) else putNull("altitude_m")
-            if (locationSource != null) put("location_source", locationSource) else putNull("location_source")
-            if (locationTimeMs != null) put("location_time_ms", locationTimeMs) else putNull("location_time_ms")
-            if (bearingDeg != null) put("bearing_deg", bearingDeg) else putNull("bearing_deg")
-            if (bearingAccuracyDeg != null) put("bearing_accuracy_deg", bearingAccuracyDeg) else putNull("bearing_accuracy_deg")
-            put("zoom_jpeg", zoomJpeg)
-            put("mid_jpeg", midJpeg)
-            put("wide_jpeg", wideJpeg)
+        db.beginTransaction()
+        try {
+            val cv = ContentValues().apply {
+                put("captured_at", capturedAt)
+                if (lat != null) put("lat", lat) else putNull("lat")
+                if (lon != null) put("lon", lon) else putNull("lon")
+                if (accuracyM != null) put("accuracy_m", accuracyM) else putNull("accuracy_m")
+                if (altitudeM != null) put("altitude_m", altitudeM) else putNull("altitude_m")
+                if (locationSource != null) put("location_source", locationSource) else putNull("location_source")
+                if (locationTimeMs != null) put("location_time_ms", locationTimeMs) else putNull("location_time_ms")
+                if (bearingDeg != null) put("bearing_deg", bearingDeg) else putNull("bearing_deg")
+                if (bearingAccuracyDeg != null) put("bearing_accuracy_deg", bearingAccuracyDeg) else putNull("bearing_accuracy_deg")
+                put("mid_jpeg", midJpeg)
+                put("wide_jpeg", wideJpeg)
+            }
+            val shotId = db.insertOrThrow("shots", null, cv)
+
+            burstFrames.forEachIndexed { index, bytes ->
+                val bv = ContentValues().apply {
+                    put("shot_id", shotId)
+                    put("frame_index", index)
+                    put("jpeg", bytes)
+                }
+                db.insertOrThrow("burst_frames", null, bv)
+            }
+
+            db.setTransactionSuccessful()
+            return shotId
+        } finally {
+            db.endTransaction()
         }
-        return db.insertOrThrow("shots", null, cv)
     }
 
     fun getShotCount(): Int {
@@ -53,9 +71,16 @@ class SessionDb(private val db: SQLiteDatabase) {
                     accuracy_m REAL, altitude_m REAL,
                     location_source TEXT, location_time_ms INTEGER,
                     bearing_deg REAL, bearing_accuracy_deg REAL,
-                    zoom_jpeg BLOB NOT NULL,
                     mid_jpeg BLOB NOT NULL,
                     wide_jpeg BLOB NOT NULL
+                )
+            """.trimIndent())
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS burst_frames (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    shot_id INTEGER NOT NULL REFERENCES shots(id),
+                    frame_index INTEGER NOT NULL,
+                    jpeg BLOB NOT NULL
                 )
             """.trimIndent())
             db.execSQL("""
