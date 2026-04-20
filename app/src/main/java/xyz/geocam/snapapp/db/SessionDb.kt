@@ -81,7 +81,7 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
         db.execSQL("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", arrayOf(key, value))
     }
 
-    fun close() = db.close()
+    override fun close() = db.close()
 
     companion object {
         fun openReadOnly(file: File): SessionDb {
