@@ -4,7 +4,8 @@
     <string name="close_session">Close Session</string>
     <string name="shutter">Take shot</string>
     <string name="settings">Settings</string>
-    <string name="upload_url">Upload URL</string>
+    <string name="upload_url">Server URL</string>
+    <string name="view_results">View results →</string>
     <string name="update_url">Update check URL</string>
     <string name="save">Save</string>
     <string name="upload">Upload</string>

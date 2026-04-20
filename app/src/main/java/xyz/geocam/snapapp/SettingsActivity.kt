@@ -19,7 +19,7 @@ class SettingsActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-        binding.editUploadUrl.setText(prefs.getString("upload_url", ""))
+        binding.editUploadUrl.setText(prefs.getString("server_url", ""))
         binding.editUpdateUrl.setText(
             prefs.getString("update_url", UpdateChecker.DEFAULT_RELEASES_URL)
         )
@@ -38,7 +38,7 @@ class SettingsActivity : AppCompatActivity() {
 
         binding.buttonSave.setOnClickListener {
             prefs.edit()
-                .putString("upload_url", binding.editUploadUrl.text.toString().trim())
+                .putString("server_url", binding.editUploadUrl.text.toString().trim())
                 .putString("update_url", binding.editUpdateUrl.text.toString().trim()
                     .ifBlank { UpdateChecker.DEFAULT_RELEASES_URL })
                 .putInt("jpeg_quality", binding.seekQuality.progress)

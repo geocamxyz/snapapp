@@ -41,6 +41,15 @@
             android:textAppearance="?attr/textAppearanceBodySmall"
             android:alpha="0.7" />
 
+        <TextView
+            android:id="@+id/textViewResults"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/view_results"
+            android:textColor="@color/colorPrimary"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:visibility="gone" />
+
     </LinearLayout>
 
     <ImageButton

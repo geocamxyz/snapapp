@@ -7,6 +7,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -14,16 +15,15 @@ import kotlinx.coroutines.withContext
 import xyz.geocam.snapapp.data.SessionFile
 import xyz.geocam.snapapp.data.UploadStatus
 import xyz.geocam.snapapp.databinding.ActivityMainBinding
-import androidx.core.content.FileProvider
 import xyz.geocam.snapapp.update.UpdateChecker
 import xyz.geocam.snapapp.upload.SessionUploader
+import xyz.geocam.snapapp.upload.UploadResult
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: SessionAdapter
-    private val uploader = SessionUploader()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,7 +31,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
 
-        adapter = SessionAdapter(onUpload = ::uploadSession, onShare = ::shareSession)
+        adapter = SessionAdapter(
+            onUpload = ::uploadSession,
+            onShare = ::shareSession,
+            onView = { url -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        )
         binding.recyclerView.adapter = adapter
 
         binding.fabNewSession.setOnClickListener {
@@ -63,11 +67,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadSessions() {
         lifecycleScope.launch {
-            val prefs = getSharedPreferences("upload_status", MODE_PRIVATE)
+            val statusPrefs = getSharedPreferences("upload_status", MODE_PRIVATE)
+            val projectPrefs = getSharedPreferences("project_urls", MODE_PRIVATE)
             val sessions = withContext(Dispatchers.IO) {
                 filesDir.listFiles { f -> f.extension == "db" }
                     ?.sortedByDescending { it.lastModified() }
-                    ?.map { SessionFile.fromFile(it, prefs) }
+                    ?.map { SessionFile.fromFile(it, statusPrefs, projectPrefs) }
                     ?: emptyList()
             }
             adapter.submitList(sessions)
@@ -89,21 +94,43 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun uploadSession(session: SessionFile) {
-        val uploadUrl = getSharedPreferences("settings", MODE_PRIVATE)
-            .getString("upload_url", "") ?: ""
-        if (uploadUrl.isBlank()) {
-            Toast.makeText(this, "Configure upload URL in Settings first", Toast.LENGTH_SHORT).show()
+        val baseUrl = getSharedPreferences("settings", MODE_PRIVATE)
+            .getString("server_url", "") ?: ""
+        if (baseUrl.isBlank()) {
+            Toast.makeText(this, "Configure server URL in Settings first", Toast.LENGTH_SHORT).show()
             return
         }
-        val prefs = getSharedPreferences("upload_status", MODE_PRIVATE)
-        prefs.edit().putString(session.name, "UPLOADING").apply()
+
+        val statusPrefs = getSharedPreferences("upload_status", MODE_PRIVATE)
+        statusPrefs.edit().putString(session.name, "UPLOADING").apply()
         adapter.updateStatus(session.name, UploadStatus.UPLOADING)
 
-        uploader.upload(File(session.path), uploadUrl) { success ->
-            runOnUiThread {
-                val status = if (success) "UPLOADED" else "ERROR"
-                prefs.edit().putString(session.name, status).apply()
-                adapter.updateStatus(session.name, if (success) UploadStatus.UPLOADED else UploadStatus.ERROR)
+        lifecycleScope.launch {
+            val result = SessionUploader(this@MainActivity).upload(
+                dbFile = File(session.path),
+                baseUrl = baseUrl,
+                onProgress = { sent, total ->
+                    val pct = if (total > 0) (sent * 100 / total).toInt() else 0
+                    runOnUiThread { adapter.updateProgress(session.name, pct) }
+                }
+            )
+            when (result) {
+                is UploadResult.Success -> {
+                    statusPrefs.edit().putString(session.name, "UPLOADED").apply()
+                    getSharedPreferences("project_urls", MODE_PRIVATE)
+                        .edit().putString(session.name, result.projectUrl).apply()
+                    adapter.updateStatus(session.name, UploadStatus.UPLOADED)
+                    adapter.updateProjectUrl(session.name, result.projectUrl)
+                }
+                is UploadResult.Failure -> {
+                    statusPrefs.edit().putString(session.name, "ERROR").apply()
+                    adapter.updateStatus(session.name, UploadStatus.ERROR)
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Upload failed: ${result.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }

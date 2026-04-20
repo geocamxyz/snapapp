@@ -1,6 +1,7 @@
 package xyz.geocam.snapapp
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -14,13 +15,31 @@ import java.util.Locale
 
 class SessionAdapter(
     private val onUpload: (SessionFile) -> Unit,
-    private val onShare: (SessionFile) -> Unit
+    private val onShare: (SessionFile) -> Unit,
+    private val onView: (String) -> Unit
 ) : ListAdapter<SessionFile, SessionAdapter.ViewHolder>(DIFF) {
 
     private val statusOverrides = mutableMapOf<String, UploadStatus>()
+    private val progressOverrides = mutableMapOf<String, Int>()
+    private val projectUrlOverrides = mutableMapOf<String, String>()
 
     fun updateStatus(name: String, status: UploadStatus) {
         statusOverrides[name] = status
+        if (status != UploadStatus.UPLOADING) progressOverrides.remove(name)
+        notifyItemForName(name)
+    }
+
+    fun updateProgress(name: String, percent: Int) {
+        progressOverrides[name] = percent
+        notifyItemForName(name)
+    }
+
+    fun updateProjectUrl(name: String, url: String) {
+        projectUrlOverrides[name] = url
+        notifyItemForName(name)
+    }
+
+    private fun notifyItemForName(name: String) {
         val idx = currentList.indexOfFirst { it.name == name }
         if (idx >= 0) notifyItemChanged(idx)
     }
@@ -30,14 +49,25 @@ class SessionAdapter(
             b.textName.text = item.name.removeSuffix(".db")
             b.textDate.text = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
                 .format(Date(item.lastModified))
+
             val status = statusOverrides[item.name] ?: item.uploadStatus
             b.imageStatus.setImageResource(status.iconRes())
             b.imageStatus.contentDescription = status.name
+
             val uploading = status == UploadStatus.UPLOADING
+            val pct = progressOverrides[item.name]
             b.buttonUpload.isEnabled = !uploading
-            b.buttonUpload.text = if (uploading) "Uploading…" else "Upload"
+            b.buttonUpload.text = when {
+                uploading && pct != null -> "$pct%"
+                uploading -> "…"
+                else -> itemView.context.getString(R.string.upload)
+            }
             b.buttonUpload.setOnClickListener { onUpload(item) }
             b.buttonShare.setOnClickListener { onShare(item) }
+
+            val url = projectUrlOverrides[item.name] ?: item.projectUrl
+            b.textViewResults.visibility = if (url != null) View.VISIBLE else View.GONE
+            b.textViewResults.setOnClickListener { url?.let { onView(it) } }
         }
     }
 
