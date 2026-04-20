@@ -13,7 +13,8 @@ import java.util.Date
 import java.util.Locale
 
 class SessionAdapter(
-    private val onUpload: (SessionFile) -> Unit
+    private val onUpload: (SessionFile) -> Unit,
+    private val onShare: (SessionFile) -> Unit
 ) : ListAdapter<SessionFile, SessionAdapter.ViewHolder>(DIFF) {
 
     private val statusOverrides = mutableMapOf<String, UploadStatus>()
@@ -36,6 +37,7 @@ class SessionAdapter(
             b.buttonUpload.isEnabled = !uploading
             b.buttonUpload.text = if (uploading) "Uploading…" else "Upload"
             b.buttonUpload.setOnClickListener { onUpload(item) }
+            b.buttonShare.setOnClickListener { onShare(item) }
         }
     }
 

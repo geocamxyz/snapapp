@@ -9,7 +9,9 @@ import android.hardware.SensorManager
 import android.location.Geocoder
 import android.os.Build
 import android.os.Bundle
+import android.view.ScaleGestureDetector
 import android.view.View
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -37,12 +39,14 @@ import java.util.Date
 import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.math.roundToInt
 
 class SessionActivity : AppCompatActivity(), SensorEventListener {
 
     private lateinit var binding: ActivitySessionBinding
     private lateinit var locationHelper: LocationHelper
     private lateinit var sensorManager: SensorManager
+    private lateinit var scaleDetector: ScaleGestureDetector
 
     private var imageCapture: ImageCapture? = null
     private var camera: androidx.camera.core.Camera? = null
@@ -50,6 +54,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private var sessionName: String? = null
     private var shotCount = 0
     private var capturing = false
+    private var sliderTracking = false
 
     private var currentBearing = Float.NaN
     private var bearingAccuracyDeg = Float.NaN
@@ -76,7 +81,35 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         locationHelper = LocationHelper(this)
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
 
-        checkPermissionsAndStart()
+        scaleDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val cam = camera ?: return false
+                val state = cam.cameraInfo.zoomState.value ?: return false
+                val newRatio = (state.zoomRatio * detector.scaleFactor)
+                    .coerceIn(state.minZoomRatio, state.maxZoomRatio)
+                cam.cameraControl.setZoomRatio(newRatio)
+                return true
+            }
+        })
+
+        binding.viewFinder.setOnTouchListener { v, event ->
+            scaleDetector.onTouchEvent(event)
+            v.performClick()
+            false
+        }
+
+        binding.seekZoom.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seek: SeekBar, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                val cam = camera ?: return
+                val state = cam.cameraInfo.zoomState.value ?: return
+                val ratio = state.minZoomRatio +
+                    (progress.toFloat() / seek.max) * (state.maxZoomRatio - state.minZoomRatio)
+                cam.cameraControl.setZoomRatio(ratio)
+            }
+            override fun onStartTrackingTouch(seek: SeekBar) { sliderTracking = true }
+            override fun onStopTrackingTouch(seek: SeekBar) { sliderTracking = false }
+        })
 
         binding.buttonShutter.setOnClickListener {
             if (!capturing) captureShot()
@@ -85,6 +118,8 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         binding.buttonCloseSession.setOnClickListener {
             confirmCloseSession()
         }
+
+        checkPermissionsAndStart()
     }
 
     override fun onResume() {
@@ -157,10 +192,25 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                     this, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture!!
                 )
                 binding.viewFinder.scaleType = PreviewView.ScaleType.FILL_CENTER
+                observeZoomState()
             } catch (e: Exception) {
                 Toast.makeText(this, "Camera init failed: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun observeZoomState() {
+        camera?.cameraInfo?.zoomState?.observe(this) { state ->
+            val ratio = state.zoomRatio
+            binding.textZoomLevel.text = "%.1f×".format(ratio)
+            if (!sliderTracking) {
+                val range = state.maxZoomRatio - state.minZoomRatio
+                val progress = if (range > 0f)
+                    ((ratio - state.minZoomRatio) / range * binding.seekZoom.max).roundToInt()
+                else 0
+                binding.seekZoom.progress = progress
+            }
+        }
     }
 
     private fun captureShot() {
