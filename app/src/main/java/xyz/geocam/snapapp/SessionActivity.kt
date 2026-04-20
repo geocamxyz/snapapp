@@ -226,7 +226,6 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 if (sessionDb == null) {
                     val name = buildSessionName()
                     sessionName = name
-                    File(filesDir, name).mkdirs()
                     val dbFile = File(filesDir, "$name.db")
                     sessionDb = SessionDb.create(dbFile)
                     sessionDb!!.setMeta("session_start", System.currentTimeMillis().toString())
@@ -236,22 +235,29 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 val captureZoom = cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f
                 val halfZoom = 1f + (captureZoom - 1f) * 0.5f
                 val ts = System.currentTimeMillis()
-                val dir = File(filesDir, sessionName!!)
+                val tmp = cacheDir
 
                 binding.textCaptureStatus.text = "Capturing zoom…"
-                val zoomPath = takePicture(ic, File(dir, "shot_${ts}_zoom.jpg"))
+                val zoomFile = File(tmp, "snap_zoom.jpg")
+                takePicture(ic, zoomFile)
 
                 cam.cameraControl.setZoomRatio(halfZoom).await()
                 delay(600)
                 binding.textCaptureStatus.text = "Capturing mid…"
-                val midPath = takePicture(ic, File(dir, "shot_${ts}_mid.jpg"))
+                val midFile = File(tmp, "snap_mid.jpg")
+                takePicture(ic, midFile)
 
                 cam.cameraControl.setZoomRatio(1f).await()
                 delay(600)
                 binding.textCaptureStatus.text = "Capturing wide…"
-                val widePath = takePicture(ic, File(dir, "shot_${ts}_wide.jpg"))
+                val wideFile = File(tmp, "snap_wide.jpg")
+                takePicture(ic, wideFile)
 
                 cam.cameraControl.setZoomRatio(captureZoom).await()
+
+                val zoomBytes = zoomFile.readBytes().also { zoomFile.delete() }
+                val midBytes  = midFile.readBytes().also  { midFile.delete()  }
+                val wideBytes = wideFile.readBytes().also { wideFile.delete() }
 
                 val loc = locationHelper.current ?: locationHelper.getLastKnown()
                 val bearing = if (currentBearing.isNaN()) null else currentBearing
@@ -263,9 +269,9 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                     accuracyM = loc?.accuracyM, altitudeM = loc?.altitudeM,
                     locationSource = loc?.source, locationTimeMs = loc?.timeMs,
                     bearingDeg = bearing, bearingAccuracyDeg = bearingAcc,
-                    zoomJpegPath = zoomPath,
-                    midJpegPath = midPath,
-                    wideJpegPath = widePath
+                    zoomJpeg = zoomBytes,
+                    midJpeg = midBytes,
+                    wideJpeg = wideBytes
                 )
                 shotCount = sessionDb!!.getShotCount()
                 binding.textShotCount.text = "Shots: $shotCount"
@@ -281,7 +287,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private suspend fun takePicture(ic: ImageCapture, file: File): String =
+    private suspend fun takePicture(ic: ImageCapture, file: File): Unit =
         suspendCancellableCoroutine { cont ->
             val options = ImageCapture.OutputFileOptions.Builder(file).build()
             ic.takePicture(
@@ -289,7 +295,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 ContextCompat.getMainExecutor(this),
                 object : ImageCapture.OnImageSavedCallback {
                     override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                        cont.resume(file.absolutePath)
+                        cont.resume(Unit)
                     }
                     override fun onError(exc: ImageCaptureException) {
                         cont.resumeWithException(exc)

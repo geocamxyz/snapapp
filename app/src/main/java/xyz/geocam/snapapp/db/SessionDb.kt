@@ -1,5 +1,6 @@
 package xyz.geocam.snapapp.db
 
+import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import java.io.File
 
@@ -11,23 +12,23 @@ class SessionDb(private val db: SQLiteDatabase) {
         accuracyM: Float?, altitudeM: Double?,
         locationSource: String?, locationTimeMs: Long?,
         bearingDeg: Float?, bearingAccuracyDeg: Float?,
-        zoomJpegPath: String, midJpegPath: String, wideJpegPath: String
+        zoomJpeg: ByteArray, midJpeg: ByteArray, wideJpeg: ByteArray
     ): Long {
-        val sql = """
-            INSERT INTO shots (
-                captured_at, lat, lon, accuracy_m, altitude_m,
-                location_source, location_time_ms,
-                bearing_deg, bearing_accuracy_deg,
-                zoom_jpeg_path, mid_jpeg_path, wide_jpeg_path
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """.trimIndent()
-        db.execSQL(sql, arrayOf(
-            capturedAt, lat, lon, accuracyM, altitudeM,
-            locationSource, locationTimeMs,
-            bearingDeg, bearingAccuracyDeg,
-            zoomJpegPath, midJpegPath, wideJpegPath
-        ))
-        return db.compileStatement("SELECT last_insert_rowid()").simpleQueryForLong()
+        val cv = ContentValues().apply {
+            put("captured_at", capturedAt)
+            if (lat != null) put("lat", lat) else putNull("lat")
+            if (lon != null) put("lon", lon) else putNull("lon")
+            if (accuracyM != null) put("accuracy_m", accuracyM) else putNull("accuracy_m")
+            if (altitudeM != null) put("altitude_m", altitudeM) else putNull("altitude_m")
+            if (locationSource != null) put("location_source", locationSource) else putNull("location_source")
+            if (locationTimeMs != null) put("location_time_ms", locationTimeMs) else putNull("location_time_ms")
+            if (bearingDeg != null) put("bearing_deg", bearingDeg) else putNull("bearing_deg")
+            if (bearingAccuracyDeg != null) put("bearing_accuracy_deg", bearingAccuracyDeg) else putNull("bearing_accuracy_deg")
+            put("zoom_jpeg", zoomJpeg)
+            put("mid_jpeg", midJpeg)
+            put("wide_jpeg", wideJpeg)
+        }
+        return db.insertOrThrow("shots", null, cv)
     }
 
     fun getShotCount(): Int {
@@ -52,9 +53,9 @@ class SessionDb(private val db: SQLiteDatabase) {
                     accuracy_m REAL, altitude_m REAL,
                     location_source TEXT, location_time_ms INTEGER,
                     bearing_deg REAL, bearing_accuracy_deg REAL,
-                    zoom_jpeg_path TEXT NOT NULL,
-                    mid_jpeg_path TEXT NOT NULL,
-                    wide_jpeg_path TEXT NOT NULL
+                    zoom_jpeg BLOB NOT NULL,
+                    mid_jpeg BLOB NOT NULL,
+                    wide_jpeg BLOB NOT NULL
                 )
             """.trimIndent())
             db.execSQL("""
