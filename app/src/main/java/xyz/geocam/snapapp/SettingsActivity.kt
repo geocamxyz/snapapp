@@ -38,7 +38,7 @@ class SettingsActivity : AppCompatActivity() {
 
         binding.buttonSave.setOnClickListener {
             prefs.edit()
-                .putString("server_url", binding.editUploadUrl.text.toString().trim())
+                .putString("server_url", normalizeUrl(binding.editUploadUrl.text.toString()))
                 .putString("update_url", binding.editUpdateUrl.text.toString().trim()
                     .ifBlank { UpdateChecker.DEFAULT_RELEASES_URL })
                 .putInt("jpeg_quality", binding.seekQuality.progress)
@@ -46,6 +46,13 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "Settings saved", Toast.LENGTH_SHORT).show()
             finish()
         }
+    }
+
+    private fun normalizeUrl(raw: String): String {
+        val s = raw.trim()
+        if (s.isBlank()) return s
+        return if (s.startsWith("http://") || s.startsWith("https://")) s
+        else "https://$s"
     }
 
     private fun updateQualityLabel(quality: Int) {
