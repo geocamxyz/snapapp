@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.geocam.snapapp.data.SessionFile
@@ -24,6 +25,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: SessionAdapter
+    private val activeUploads = mutableMapOf<String, Job>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,7 +38,8 @@ class MainActivity : AppCompatActivity() {
             onUpload = ::uploadSession,
             onShare = ::shareSession,
             onView = { url -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) },
-            onDelete = ::deleteSession
+            onDelete = ::deleteSession,
+            isUploading = { name -> activeUploads.containsKey(name) }
         )
         binding.recyclerView.adapter = adapter
 
@@ -71,6 +74,19 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val statusPrefs = getSharedPreferences("upload_status", MODE_PRIVATE)
             val projectPrefs = getSharedPreferences("project_urls", MODE_PRIVATE)
+
+            // Any session marked UPLOADING but with no active job is a stale state
+            // from a previous process — reset it so the user can retry
+            withContext(Dispatchers.IO) {
+                val edit = statusPrefs.edit()
+                statusPrefs.all.forEach { (key, value) ->
+                    if (value == "UPLOADING" && !activeUploads.containsKey(key)) {
+                        edit.putString(key, "PENDING")
+                    }
+                }
+                edit.apply()
+            }
+
             val sessions = withContext(Dispatchers.IO) {
                 filesDir.listFiles { f -> f.extension == "db" }
                     ?.sortedByDescending { it.lastModified() }
@@ -100,6 +116,8 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Delete session")
             .setMessage("Delete \"${session.name.removeSuffix(".db")}\"? This cannot be undone.")
             .setPositiveButton("Delete") { _, _ ->
+                activeUploads[session.name]?.cancel()
+                activeUploads.remove(session.name)
                 lifecycleScope.launch(Dispatchers.IO) {
                     File(session.path).delete()
                     getSharedPreferences("upload_status", MODE_PRIVATE).edit().remove(session.name).apply()
@@ -113,6 +131,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun uploadSession(session: SessionFile) {
+        // If already uploading in this process, ignore tap
+        if (activeUploads.containsKey(session.name)) return
+
         val baseUrl = getSharedPreferences("settings", MODE_PRIVATE)
             .getString("server_url", "") ?: ""
         if (baseUrl.isBlank()) {
@@ -124,7 +145,7 @@ class MainActivity : AppCompatActivity() {
         statusPrefs.edit().putString(session.name, "UPLOADING").apply()
         adapter.updateStatus(session.name, UploadStatus.UPLOADING)
 
-        lifecycleScope.launch {
+        val job = lifecycleScope.launch {
             val result = SessionUploader(this@MainActivity).upload(
                 dbFile = File(session.path),
                 baseUrl = baseUrl,
@@ -133,6 +154,7 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread { adapter.updateProgress(session.name, pct) }
                 }
             )
+            activeUploads.remove(session.name)
             when (result) {
                 is UploadResult.Success -> {
                     statusPrefs.edit().putString(session.name, "UPLOADED").apply()
@@ -152,5 +174,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        activeUploads[session.name] = job
     }
 }

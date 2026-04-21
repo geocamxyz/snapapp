@@ -30,7 +30,8 @@ class SessionAdapter(
     private val onUpload: (SessionFile) -> Unit,
     private val onShare: (SessionFile) -> Unit,
     private val onView: (String) -> Unit,
-    private val onDelete: (SessionFile) -> Unit
+    private val onDelete: (SessionFile) -> Unit,
+    private val isUploading: (String) -> Boolean
 ) : ListAdapter<SessionFile, SessionAdapter.ViewHolder>(DIFF) {
 
     private val statusOverrides = mutableMapOf<String, UploadStatus>()
@@ -71,11 +72,16 @@ class SessionAdapter(
             b.textMeta.text = "$date  ·  $size  ·  $shots"
 
             val status = statusOverrides[item.name] ?: item.uploadStatus
+            val activelyUploading = isUploading(item.name)
+
             b.imageStatus.setImageResource(status.iconRes())
             b.imageStatus.contentDescription = status.name
+            // Tapping the status icon retries when not currently uploading
+            b.imageStatus.setOnClickListener {
+                if (!activelyUploading) onUpload(item)
+            }
 
             val inDelete = item.name in deleteMode
-            val uploading = !inDelete && status == UploadStatus.UPLOADING
             val pct = progressOverrides[item.name]
 
             if (inDelete) {
@@ -88,10 +94,10 @@ class SessionAdapter(
                 }
             } else {
                 b.buttonUpload.setTextColor(ContextCompat.getColor(itemView.context, R.color.colorPrimary))
-                b.buttonUpload.isEnabled = !uploading
+                b.buttonUpload.isEnabled = !activelyUploading
                 b.buttonUpload.text = when {
-                    uploading && pct != null -> "$pct%"
-                    uploading -> "…"
+                    activelyUploading && pct != null -> "$pct%"
+                    activelyUploading -> "…"
                     else -> itemView.context.getString(R.string.upload)
                 }
                 b.buttonUpload.setOnClickListener { onUpload(item) }
