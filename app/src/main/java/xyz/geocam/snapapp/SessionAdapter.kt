@@ -52,6 +52,11 @@ class SessionAdapter(
         notifyItemForName(name)
     }
 
+    fun clearThumbnailCache() {
+        thumbnailCache.clear()
+        notifyDataSetChanged()
+    }
+
     fun updateProjectUrl(name: String, url: String) {
         projectUrlOverrides[name] = url
         notifyItemForName(name)

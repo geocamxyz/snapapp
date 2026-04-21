@@ -62,6 +62,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        if (prefs.getBoolean("regen_thumbnails", false)) {
+            prefs.edit().remove("regen_thumbnails").apply()
+            adapter.clearThumbnailCache()
+        }
         loadSessions()
     }
 

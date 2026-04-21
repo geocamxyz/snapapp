@@ -36,6 +36,11 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seek: SeekBar) {}
         })
 
+        binding.buttonRegenThumbnails.setOnClickListener {
+            prefs.edit().putBoolean("regen_thumbnails", true).apply()
+            Toast.makeText(this, "Thumbnails will reload on next visit", Toast.LENGTH_SHORT).show()
+        }
+
         binding.buttonSave.setOnClickListener {
             prefs.edit()
                 .putString("server_url", normalizeUrl(binding.editUploadUrl.text.toString()))

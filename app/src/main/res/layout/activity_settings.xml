@@ -76,6 +76,14 @@
                 android:layout_height="wrap_content"
                 android:text="@string/save" />
 
+            <Button
+                android:id="@+id/buttonRegenThumbnails"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/regen_thumbnails" />
+
         </LinearLayout>
     </ScrollView>
 
