@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.geocam.snapapp.data.SessionFile
 import xyz.geocam.snapapp.data.UploadStatus
+import xyz.geocam.snapapp.db.SessionDb
 import xyz.geocam.snapapp.databinding.ActivityMainBinding
 import xyz.geocam.snapapp.update.UpdateChecker
 import xyz.geocam.snapapp.upload.SessionUploader
