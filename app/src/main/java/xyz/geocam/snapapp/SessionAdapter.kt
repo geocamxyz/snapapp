@@ -1,5 +1,7 @@
 package xyz.geocam.snapapp
 
+import android.animation.AnimatorListenerAdapter
+import android.animation.ObjectAnimator
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -31,7 +33,8 @@ class SessionAdapter(
     private val onShare: (SessionFile) -> Unit,
     private val onView: (String) -> Unit,
     private val onDelete: (SessionFile) -> Unit,
-    private val isUploading: (String) -> Boolean
+    private val isUploading: (String) -> Boolean,
+    private val onDeleteShot: (SessionFile, Long) -> Unit
 ) : ListAdapter<SessionFile, SessionAdapter.ViewHolder>(DIFF) {
 
     private val statusOverrides = mutableMapOf<String, UploadStatus>()
@@ -40,6 +43,7 @@ class SessionAdapter(
     // Cache key = "$sessionPath:$shotId" to avoid cross-session collisions
     private val thumbnailCache = HashMap<String, Bitmap?>()
     private val deleteMode = mutableSetOf<String>()
+    private val thumbnailDeleteMode = mutableSetOf<String>()
 
     fun updateStatus(name: String, status: UploadStatus) {
         statusOverrides[name] = status
@@ -142,38 +146,48 @@ class SessionAdapter(
             val sizePx = (72 * ctx.resources.displayMetrics.density).toInt()
             val gapPx = (4 * ctx.resources.displayMetrics.density).toInt()
 
-            // Build ImageViews tagged with their cache keys
             val entries = item.shotIds.map { shotId ->
                 val key = cacheKey(item.path, shotId)
+                val inDeleteMode = thumbnailDeleteMode.contains(key)
                 val thumb = ImageView(ctx).apply {
                     layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply { rightMargin = gapPx }
                     scaleType = ImageView.ScaleType.CENTER_CROP
-                    setBackgroundColor(0xFF2A2A2A.toInt())
                     tag = key
+                    if (inDeleteMode) {
+                        setImageResource(R.drawable.ic_delete_shot)
+                        setBackgroundColor(0xFFCC2200.toInt())
+                    } else {
+                        setBackgroundColor(0xFF2A2A2A.toInt())
+                        if (thumbnailCache.containsKey(key)) setImageBitmap(thumbnailCache[key])
+                    }
                 }
+
+                thumb.setOnLongClickListener {
+                    val nowDelete = !thumbnailDeleteMode.contains(key)
+                    if (nowDelete) thumbnailDeleteMode.add(key) else thumbnailDeleteMode.remove(key)
+                    flipThumb(thumb, toDelete = nowDelete, bitmap = thumbnailCache[key])
+                    true
+                }
+                thumb.setOnClickListener {
+                    if (thumbnailDeleteMode.contains(key)) onDeleteShot(item, shotId)
+                }
+
                 strip.addView(thumb)
-                // Apply from cache immediately if present
-                if (thumbnailCache.containsKey(key)) {
-                    thumb.setImageBitmap(thumbnailCache[key])
-                }
                 key to shotId
             }
 
             val uncachedIds = entries
-                .filter { (key, _) -> !thumbnailCache.containsKey(key) }
+                .filter { (key, _) -> !thumbnailCache.containsKey(key) && !thumbnailDeleteMode.contains(key) }
                 .map { (_, shotId) -> shotId }
 
             if (uncachedIds.isEmpty()) return
 
-            // Load all uncached thumbnails from this session's DB in one pass
             scope.launch {
                 val loaded = withContext(Dispatchers.IO) {
                     try {
                         SessionDb.openReadOnly(File(item.path)).use { db ->
                             uncachedIds.associateWith { shotId ->
-                                db.loadThumbnail(shotId)?.let { bytes ->
-                                    decodeThumbnail(bytes)
-                                }
+                                db.loadThumbnail(shotId)?.let { bytes -> decodeThumbnail(bytes) }
                             }
                         }
                     } catch (e: Exception) {
@@ -183,7 +197,9 @@ class SessionAdapter(
                 loaded.forEach { (shotId, bitmap) ->
                     val key = cacheKey(item.path, shotId)
                     thumbnailCache[key] = bitmap
-                    strip.findViewWithTag<ImageView>(key)?.setImageBitmap(bitmap)
+                    if (!thumbnailDeleteMode.contains(key)) {
+                        strip.findViewWithTag<ImageView>(key)?.setImageBitmap(bitmap)
+                    }
                 }
             }
         }
@@ -202,6 +218,27 @@ class SessionAdapter(
         }
 
         private fun cacheKey(sessionPath: String, shotId: Long) = "$sessionPath:$shotId"
+
+        private fun flipThumb(view: ImageView, toDelete: Boolean, bitmap: Bitmap?) {
+            ObjectAnimator.ofFloat(view, "rotationY", 0f, 90f).apply {
+                duration = 140
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        if (toDelete) {
+                            view.setImageResource(R.drawable.ic_delete_shot)
+                            view.setBackgroundColor(0xFFCC2200.toInt())
+                        } else {
+                            view.setImageBitmap(bitmap)
+                            view.setBackgroundColor(0xFF2A2A2A.toInt())
+                        }
+                        view.rotationY = -90f
+                        ObjectAnimator.ofFloat(view, "rotationY", -90f, 0f).apply {
+                            duration = 140
+                        }.start()
+                    }
+                })
+            }.start()
+        }
 
         private fun decodeThumbnail(bytes: ByteArray): Bitmap? = try {
             val opts = BitmapFactory.Options().apply { inSampleSize = 4 }

@@ -51,7 +51,8 @@ class MainActivity : AppCompatActivity() {
             onShare = ::shareSession,
             onView = { url -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) },
             onDelete = ::deleteSession,
-            isUploading = { name -> activeUploads.containsKey(name) }
+            isUploading = { name -> activeUploads.containsKey(name) },
+            onDeleteShot = ::deleteShotFromSession
         )
         binding.recyclerView.adapter = adapter
 
@@ -156,6 +157,20 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun deleteShotFromSession(session: SessionFile, shotId: Long) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                SessionDb.openReadWrite(File(session.path)).use { it.deleteShot(shotId) }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Delete failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) { loadSessions() }
+        }
     }
 
     private fun uploadSession(session: SessionFile) {

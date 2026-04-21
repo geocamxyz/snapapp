@@ -77,6 +77,17 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
         ).use { c -> return if (c.moveToFirst()) c.getBlob(0) else null }
     }
 
+    fun deleteShot(shotId: Long) {
+        db.beginTransaction()
+        try {
+            db.delete("burst_frames", "shot_id=?", arrayOf(shotId.toString()))
+            db.delete("shots", "id=?", arrayOf(shotId.toString()))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     fun setMeta(key: String, value: String) {
         db.execSQL("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", arrayOf(key, value))
     }
@@ -84,6 +95,11 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
     override fun close() = db.close()
 
     companion object {
+        fun openReadWrite(file: File): SessionDb {
+            val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+            return SessionDb(db)
+        }
+
         fun openReadOnly(file: File): SessionDb {
             val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
             return SessionDb(db)
