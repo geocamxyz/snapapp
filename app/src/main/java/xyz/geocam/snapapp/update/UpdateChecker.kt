@@ -3,8 +3,6 @@ package xyz.geocam.snapapp.update
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.CoroutineScope
@@ -16,7 +14,12 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 
-class UpdateChecker(private val context: Context) {
+class UpdateChecker(
+    private val context: Context,
+    // Called when we need the install-unknown-apps permission; the url is
+    // passed back so the caller can resume the install after the user returns
+    private val onNeedInstallPermission: ((apkUrl: String) -> Unit)? = null
+) {
 
     private val http = OkHttpClient()
     private val scope = CoroutineScope(Dispatchers.Main)
@@ -35,7 +38,7 @@ class UpdateChecker(private val context: Context) {
                 if (info.versionCode > currentVersionCode) {
                     showUpdateDialog(info)
                 } else {
-                    Toast.makeText(context, "App is up to date (v${currentVersionCode})", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "App is up to date (v$currentVersionCode)", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Toast.makeText(context, "Update check failed: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -43,39 +46,50 @@ class UpdateChecker(private val context: Context) {
         }
     }
 
+    // Called by MainActivity after the user grants install permission
+    fun triggerInstall(apkUrl: String) = doDownloadAndInstall(apkUrl)
+
     private fun fetchLatestRelease(url: String): ReleaseInfo? {
         val response = http.newCall(Request.Builder().url(url).build()).execute()
         if (!response.isSuccessful) return null
         val json = JSONObject(response.body!!.string())
-        val tag = json.getString("tag_name") // e.g. "v1.0.42"
+        val tag = json.getString("tag_name")
         val versionCode = tag.removePrefix("v").substringAfterLast(".").toIntOrNull() ?: return null
         val assets = json.getJSONArray("assets")
-        var apkUrl: String? = null
         for (i in 0 until assets.length()) {
             val asset = assets.getJSONObject(i)
             if (asset.getString("name").endsWith(".apk")) {
-                apkUrl = asset.getString("browser_download_url")
-                break
+                return ReleaseInfo(tag, versionCode, asset.getString("browser_download_url"))
             }
         }
-        return if (apkUrl != null) ReleaseInfo(tag, versionCode, apkUrl) else null
+        return null
     }
 
     private fun showUpdateDialog(info: ReleaseInfo) {
         AlertDialog.Builder(context)
             .setTitle("Update available")
             .setMessage("Version ${info.tag} is available. Download and install?")
-            .setPositiveButton("Install") { _, _ -> downloadAndInstall(info.apkUrl) }
+            .setPositiveButton("Install") { _, _ -> doDownloadAndInstall(info.apkUrl) }
             .setNegativeButton("Later", null)
             .show()
     }
 
-    private fun downloadAndInstall(apkUrl: String) {
+    private fun doDownloadAndInstall(apkUrl: String) {
         if (!context.packageManager.canRequestPackageInstalls()) {
-            Toast.makeText(context, "Enable 'Install unknown apps' for SnapApp in Settings", Toast.LENGTH_LONG).show()
-            context.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                data = Uri.parse("package:${context.packageName}")
-            })
+            Toast.makeText(
+                context,
+                "Grant 'Install unknown apps' permission — the download will start automatically when you return",
+                Toast.LENGTH_LONG
+            ).show()
+            if (onNeedInstallPermission != null) {
+                onNeedInstallPermission.invoke(apkUrl)
+            } else {
+                context.startActivity(
+                    Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = android.net.Uri.parse("package:${context.packageName}")
+                    }
+                )
+            }
             return
         }
         Toast.makeText(context, "Downloading update…", Toast.LENGTH_SHORT).show()

@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
@@ -26,6 +27,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: SessionAdapter
     private val activeUploads = mutableMapOf<String, Job>()
+    private var pendingInstallUrl: String? = null
+
+    private val installPermLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        val url = pendingInstallUrl ?: return@registerForActivityResult
+        if (packageManager.canRequestPackageInstalls()) {
+            pendingInstallUrl = null
+            makeUpdateChecker().triggerInstall(url)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,10 +76,19 @@ class MainActivity : AppCompatActivity() {
             true
         }
         R.id.action_check_updates -> {
-            UpdateChecker(this).check(BuildConfig.VERSION_CODE)
+            makeUpdateChecker().check(BuildConfig.VERSION_CODE)
             true
         }
         else -> super.onOptionsItemSelected(item)
+    }
+
+    private fun makeUpdateChecker() = UpdateChecker(this) { apkUrl ->
+        pendingInstallUrl = apkUrl
+        installPermLauncher.launch(
+            Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = Uri.parse("package:$packageName")
+            }
+        )
     }
 
     private fun loadSessions() {
