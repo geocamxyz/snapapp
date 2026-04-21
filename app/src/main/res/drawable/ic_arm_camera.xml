@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="120dp"
+    android:viewportWidth="64"
+    android:viewportHeight="120">
+
+    <!-- Phone body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M15,2 L49,2 Q54,2 54,7 L54,69 Q54,74 49,74 L15,74 Q10,74 10,69 L10,7 Q10,2 15,2 Z" />
+
+    <!-- Lens outer ring -->
+    <path
+        android:fillColor="#444444"
+        android:pathData="M32,22 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0" />
+
+    <!-- Lens inner -->
+    <path
+        android:fillColor="#777777"
+        android:pathData="M32,22 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+
+    <!-- Home indicator bar at phone bottom -->
+    <path
+        android:fillColor="#BBBBBB"
+        android:pathData="M26,66 L38,66 Q40,66 40,68 Q40,70 38,70 L26,70 Q24,70 24,68 Q24,66 26,66 Z" />
+
+    <!-- Palm -->
+    <path
+        android:fillColor="#CCCCCC"
+        android:pathData="M10,74 L54,74 Q58,74 58,78 L58,91 Q58,95 54,95 L10,95 Q6,95 6,91 L6,78 Q6,74 10,74 Z" />
+
+    <!-- Thumb sticking out left -->
+    <path
+        android:fillColor="#CCCCCC"
+        android:pathData="M6,77 Q0,77 0,83 Q0,90 6,89 Z" />
+
+    <!-- Index finger -->
+    <path
+        android:fillColor="#CCCCCC"
+        android:pathData="M11,95 L11,113 Q11,117 15,117 Q19,117 19,113 L19,95 Z" />
+
+    <!-- Middle finger -->
+    <path
+        android:fillColor="#CCCCCC"
+        android:pathData="M22,95 L22,116 Q22,120 26,120 Q30,120 30,116 L30,95 Z" />
+
+    <!-- Ring finger -->
+    <path
+        android:fillColor="#CCCCCC"
+        android:pathData="M34,95 L34,116 Q34,120 38,120 Q42,120 42,116 L42,95 Z" />
+
+    <!-- Pinky -->
+    <path
+        android:fillColor="#CCCCCC"
+        android:pathData="M45,95 L45,111 Q45,115 49,115 Q53,115 53,111 L53,95 Z" />
+
+</vector>

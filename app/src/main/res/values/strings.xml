@@ -15,4 +15,9 @@
     <string name="jpeg_quality">JPEG quality</string>
     <string name="delete">Delete</string>
     <string name="regen_thumbnails">Regenerate thumbnails</string>
+    <string name="capture">Capture</string>
+    <string name="guide_instruction">← Sweep right to left, keep subject centred</string>
+    <string name="guide_hold">Hold still…</string>
+    <string name="guide_tap_skip">Tap to skip</string>
+    <string name="guide_move_reminder">↔ Move to a new position, then capture again</string>
 </resources>

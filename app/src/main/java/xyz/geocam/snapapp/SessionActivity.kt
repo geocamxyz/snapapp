@@ -1,18 +1,23 @@
 package xyz.geocam.snapapp
 
 import android.Manifest
+import android.animation.AnimatorListenerAdapter
+import android.animation.ObjectAnimator
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Geocoder
+import android.media.MediaActionSound
 import android.os.Build
 import android.os.Bundle
 import android.view.ScaleGestureDetector
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.SeekBar
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -47,6 +52,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var locationHelper: LocationHelper
     private lateinit var sensorManager: SensorManager
     private lateinit var scaleDetector: ScaleGestureDetector
+    private lateinit var shutterSound: MediaActionSound
 
     private var imageCapture: ImageCapture? = null
     private var camera: androidx.camera.core.Camera? = null
@@ -55,12 +61,15 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private var shotCount = 0
     private var capturing = false
     private var sliderTracking = false
+    private var guideAnimRunning = false
 
     private var currentBearing = Float.NaN
     private var bearingAccuracyDeg = Float.NaN
 
     companion object {
         const val BURST_COUNT = 5
+        const val BURST_INTERVAL_MS = 500L
+        const val MIN_SHOTS = 2
     }
 
     private val permissionLauncher = registerForActivityResult(
@@ -82,6 +91,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         binding = ActivitySessionBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        shutterSound = MediaActionSound().also { it.load(MediaActionSound.SHUTTER_CLICK) }
         locationHelper = LocationHelper(this)
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
 
@@ -115,24 +125,21 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
             override fun onStopTrackingTouch(seek: SeekBar) { sliderTracking = false }
         })
 
-        binding.buttonOneShot.setOnClickListener {
-            if (!capturing) captureShot(burst = false)
+        binding.buttonCapture.setOnClickListener {
+            if (!capturing) captureShot()
         }
-        binding.buttonBurst.setOnClickListener {
-            if (!capturing) captureShot(burst = true)
-        }
+        binding.buttonCloseSession.setOnClickListener { confirmCloseSession() }
 
-        binding.buttonCloseSession.setOnClickListener {
-            confirmCloseSession()
-        }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() { confirmCloseSession() }
+        })
 
         checkPermissionsAndStart()
     }
 
     override fun onResume() {
         super.onResume()
-        val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        rotationSensor?.let {
+        sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
     }
@@ -144,6 +151,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        shutterSound.release()
         locationHelper.stopUpdates()
         sessionDb?.close()
     }
@@ -154,8 +162,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         SensorManager.getRotationMatrixFromVector(rotMatrix, event.values)
         val orientation = FloatArray(3)
         SensorManager.getOrientation(rotMatrix, orientation)
-        val azimuth = Math.toDegrees(orientation[0].toDouble()).toFloat()
-        currentBearing = (azimuth + 360f) % 360f
+        currentBearing = (Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f
         binding.textBearing.text = "%.0f°".format(currentBearing)
     }
 
@@ -203,6 +210,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 )
                 binding.viewFinder.scaleType = PreviewView.ScaleType.FILL_CENTER
                 observeZoomState()
+                showGuideOverlay(moveReminder = false)
             } catch (e: Exception) {
                 Toast.makeText(this, "Camera init failed: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -223,14 +231,54 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private fun captureShot(burst: Boolean) {
+    private fun showGuideOverlay(moveReminder: Boolean) {
+        if (guideAnimRunning) return
+        guideAnimRunning = true
+
+        val w = resources.displayMetrics.widthPixels.toFloat()
+        val startX = w * 0.38f
+
+        binding.guideArm.translationX = startX
+        binding.guideText.text = getString(
+            if (moveReminder) R.string.guide_move_reminder else R.string.guide_instruction
+        )
+        binding.guideOverlay.alpha = 1f
+        binding.guideOverlay.visibility = View.VISIBLE
+
+        val sweep = ObjectAnimator.ofFloat(binding.guideArm, View.TRANSLATION_X, startX, -startX).apply {
+            duration = 2200
+            interpolator = AccelerateDecelerateInterpolator()
+        }
+        sweep.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                binding.guideText.text = getString(R.string.guide_hold)
+                binding.guideOverlay.postDelayed({
+                    binding.guideOverlay.animate()
+                        .alpha(0f).setDuration(700)
+                        .withEndAction {
+                            binding.guideOverlay.visibility = View.GONE
+                            guideAnimRunning = false
+                        }.start()
+                }, 1200)
+            }
+        })
+        sweep.start()
+
+        binding.guideOverlay.setOnClickListener {
+            sweep.cancel()
+            binding.guideOverlay.animate().cancel()
+            binding.guideOverlay.visibility = View.GONE
+            guideAnimRunning = false
+        }
+    }
+
+    private fun captureShot() {
         val cam = camera ?: return
         val ic = imageCapture ?: return
 
         lifecycleScope.launch {
             capturing = true
-            binding.buttonOneShot.isEnabled = false
-            binding.buttonBurst.isEnabled = false
+            binding.buttonCapture.isEnabled = false
             binding.progressCapture.visibility = View.VISIBLE
 
             try {
@@ -248,15 +296,14 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 val ts = System.currentTimeMillis()
                 val tmp = cacheDir
 
-                // Burst or single frame at full zoom
-                val frameCount = if (burst) BURST_COUNT else 1
                 val burstFrames = mutableListOf<ByteArray>()
-                repeat(frameCount) { i ->
-                    binding.textCaptureStatus.text =
-                        if (burst) "Burst ${i + 1}/$frameCount…" else "Capturing zoom…"
+                repeat(BURST_COUNT) { i ->
+                    binding.textCaptureStatus.text = "Frame ${i + 1}/$BURST_COUNT…"
                     val f = File(tmp, "snap_burst_$i.jpg")
+                    shutterSound.play(MediaActionSound.SHUTTER_CLICK)
                     takePicture(ic, f)
                     burstFrames.add(f.readBytes().also { f.delete() })
+                    if (i < BURST_COUNT - 1) delay(BURST_INTERVAL_MS)
                 }
 
                 cam.cameraControl.setZoomRatio(halfZoom).await()
@@ -293,13 +340,16 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 shotCount = sessionDb!!.getShotCount()
                 binding.textShotCount.text = "Shots: $shotCount"
 
+                if (shotCount < MIN_SHOTS) {
+                    showGuideOverlay(moveReminder = true)
+                }
+
             } catch (e: Exception) {
                 Toast.makeText(this@SessionActivity, "Capture failed: ${e.message}", Toast.LENGTH_SHORT).show()
             } finally {
                 binding.progressCapture.visibility = View.GONE
                 binding.textCaptureStatus.text = ""
-                binding.buttonOneShot.isEnabled = true
-                binding.buttonBurst.isEnabled = true
+                binding.buttonCapture.isEnabled = true
                 capturing = false
             }
         }
@@ -358,6 +408,24 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
 
     private fun confirmCloseSession() {
         if (sessionDb == null) { finish(); return }
+
+        if (shotCount < MIN_SHOTS) {
+            val remaining = MIN_SHOTS - shotCount
+            AlertDialog.Builder(this)
+                .setTitle("More shots needed")
+                .setMessage(
+                    "Move to a different position and take $remaining more shot${if (remaining > 1) "s" else ""} for triangulation.\n\nClose anyway and discard this session?"
+                )
+                .setPositiveButton("Close anyway") { _, _ ->
+                    sessionDb?.close()
+                    sessionDb = null
+                    finish()
+                }
+                .setNegativeButton("Keep shooting", null)
+                .show()
+            return
+        }
+
         AlertDialog.Builder(this)
             .setTitle("Close session")
             .setMessage("Close this session with $shotCount shot(s)?")

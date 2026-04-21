@@ -15,6 +15,53 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <!-- Guide overlay — covers the camera preview, shown initially -->
+    <FrameLayout
+        android:id="@+id/guideOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#BB000000"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/zoomBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageView
+            android:id="@+id/guideArm"
+            android:layout_width="64dp"
+            android:layout_height="120dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_arm_camera"
+            android:contentDescription="arm holding camera" />
+
+        <TextView
+            android:id="@+id/guideText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="36dp"
+            android:text="@string/guide_instruction"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:background="#88000000"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal|top"
+            android:layout_marginTop="16dp"
+            android:text="@string/guide_tap_skip"
+            android:textColor="#99FFFFFF"
+            android:textSize="12sp" />
+
+    </FrameLayout>
+
     <!-- bearing: top-left -->
     <TextView
         android:id="@+id/textBearing"
@@ -122,7 +169,7 @@
 
     </LinearLayout>
 
-    <!-- bottom bar: close | one shot | burst -->
+    <!-- bottom bar: close | capture -->
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="0dp"
@@ -147,24 +194,13 @@
             android:textSize="12sp" />
 
         <Button
-            android:id="@+id/buttonOneShot"
-            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:id="@+id/buttonCapture"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
+            android:layout_weight="2"
             android:layout_marginHorizontal="4dp"
-            android:text="@string/one_shot"
-            android:textColor="@android:color/white"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/buttonBurst"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginHorizontal="4dp"
-            android:text="@string/burst"
-            android:textSize="12sp" />
+            android:text="@string/capture"
+            android:textSize="14sp" />
 
     </LinearLayout>
 
