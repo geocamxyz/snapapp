@@ -54,7 +54,6 @@ class SessionAdapter(
 
     fun clearThumbnailCache() {
         thumbnailCache.clear()
-        notifyDataSetChanged()
     }
 
     fun updateProjectUrl(name: String, url: String) {

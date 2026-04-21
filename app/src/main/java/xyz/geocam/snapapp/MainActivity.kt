@@ -63,11 +63,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-        if (prefs.getBoolean("regen_thumbnails", false)) {
+        val regenThumbnails = prefs.getBoolean("regen_thumbnails", false)
+        if (regenThumbnails) {
             prefs.edit().remove("regen_thumbnails").apply()
             adapter.clearThumbnailCache()
         }
-        loadSessions()
+        loadSessions(forceRebindThumbnails = regenThumbnails)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -96,7 +97,7 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun loadSessions() {
+    private fun loadSessions(forceRebindThumbnails: Boolean = false) {
         lifecycleScope.launch {
             val statusPrefs = getSharedPreferences("upload_status", MODE_PRIVATE)
             val projectPrefs = getSharedPreferences("project_urls", MODE_PRIVATE)
@@ -120,6 +121,7 @@ class MainActivity : AppCompatActivity() {
                     ?: emptyList()
             }
             adapter.submitList(sessions)
+            if (forceRebindThumbnails) adapter.notifyDataSetChanged()
         }
     }
 

@@ -38,7 +38,7 @@ class SettingsActivity : AppCompatActivity() {
 
         binding.buttonRegenThumbnails.setOnClickListener {
             prefs.edit().putBoolean("regen_thumbnails", true).apply()
-            Toast.makeText(this, "Thumbnails will reload on next visit", Toast.LENGTH_SHORT).show()
+            finish()
         }
 
         binding.buttonSave.setOnClickListener {
