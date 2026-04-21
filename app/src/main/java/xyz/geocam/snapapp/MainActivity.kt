@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity() {
         else -> super.onOptionsItemSelected(item)
     }
 
-    private fun makeUpdateChecker() = UpdateChecker(this) { apkUrl ->
+    private fun makeUpdateChecker(): UpdateChecker = UpdateChecker(this) { apkUrl ->
         pendingInstallUrl = apkUrl
         installPermLauncher.launch(
             Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
