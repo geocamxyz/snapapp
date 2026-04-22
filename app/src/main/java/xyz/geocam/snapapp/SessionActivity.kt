@@ -67,7 +67,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private var bearingAccuracyDeg = Float.NaN
 
     companion object {
-        const val BURST_COUNT = 5
+        const val BURST_COUNT = 3
         const val BURST_INTERVAL_MS = 500L
         const val MIN_SHOTS = 2
     }
@@ -296,9 +296,21 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 val ts = System.currentTimeMillis()
                 val tmp = cacheDir
 
+                // Wide-pre: zoom out to 1× first
+                cam.cameraControl.setZoomRatio(1f).await()
+                delay(500)
+                binding.textCaptureStatus.text = "Capturing wide…"
+                val widePreFile = File(tmp, "snap_wide_pre.jpg")
+                shutterSound.play(MediaActionSound.SHUTTER_CLICK)
+                takePicture(ic, widePreFile)
+
+                // Zoom back to user level for burst
+                cam.cameraControl.setZoomRatio(captureZoom).await()
+                delay(500)
+
                 val burstFrames = mutableListOf<ByteArray>()
                 repeat(BURST_COUNT) { i ->
-                    binding.textCaptureStatus.text = "Frame ${i + 1}/$BURST_COUNT…"
+                    binding.textCaptureStatus.text = "Burst ${i + 1}/$BURST_COUNT…"
                     val f = File(tmp, "snap_burst_$i.jpg")
                     shutterSound.play(MediaActionSound.SHUTTER_CLICK)
                     takePicture(ic, f)
@@ -307,19 +319,22 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 }
 
                 cam.cameraControl.setZoomRatio(halfZoom).await()
-                delay(600)
+                delay(500)
                 binding.textCaptureStatus.text = "Capturing mid…"
                 val midFile = File(tmp, "snap_mid.jpg")
+                shutterSound.play(MediaActionSound.SHUTTER_CLICK)
                 takePicture(ic, midFile)
 
                 cam.cameraControl.setZoomRatio(1f).await()
-                delay(600)
+                delay(500)
                 binding.textCaptureStatus.text = "Capturing wide…"
                 val wideFile = File(tmp, "snap_wide.jpg")
+                shutterSound.play(MediaActionSound.SHUTTER_CLICK)
                 takePicture(ic, wideFile)
 
                 cam.cameraControl.setZoomRatio(captureZoom).await()
 
+                val widePreBytes = widePreFile.readBytes().also { widePreFile.delete() }
                 val midBytes  = midFile.readBytes().also { midFile.delete() }
                 val wideBytes = wideFile.readBytes().also { wideFile.delete() }
 
@@ -333,6 +348,8 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                     accuracyM = loc?.accuracyM, altitudeM = loc?.altitudeM,
                     locationSource = loc?.source, locationTimeMs = loc?.timeMs,
                     bearingDeg = bearing, bearingAccuracyDeg = bearingAcc,
+                    zoomRatio = captureZoom,
+                    widePrejpeg = widePreBytes,
                     burstFrames = burstFrames,
                     midJpeg = midBytes,
                     wideJpeg = wideBytes

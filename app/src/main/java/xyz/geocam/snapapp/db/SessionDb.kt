@@ -12,6 +12,8 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
         accuracyM: Float?, altitudeM: Double?,
         locationSource: String?, locationTimeMs: Long?,
         bearingDeg: Float?, bearingAccuracyDeg: Float?,
+        zoomRatio: Float,
+        widePrejpeg: ByteArray,
         burstFrames: List<ByteArray>,
         midJpeg: ByteArray,
         wideJpeg: ByteArray
@@ -28,6 +30,8 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
                 if (locationTimeMs != null) put("location_time_ms", locationTimeMs) else putNull("location_time_ms")
                 if (bearingDeg != null) put("bearing_deg", bearingDeg) else putNull("bearing_deg")
                 if (bearingAccuracyDeg != null) put("bearing_accuracy_deg", bearingAccuracyDeg) else putNull("bearing_accuracy_deg")
+                put("zoom_ratio", zoomRatio)
+                put("wide_pre_jpeg", widePrejpeg)
                 put("mid_jpeg", midJpeg)
                 put("wide_jpeg", wideJpeg)
             }
@@ -115,6 +119,8 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
                     accuracy_m REAL, altitude_m REAL,
                     location_source TEXT, location_time_ms INTEGER,
                     bearing_deg REAL, bearing_accuracy_deg REAL,
+                    zoom_ratio REAL NOT NULL,
+                    wide_pre_jpeg BLOB NOT NULL,
                     mid_jpeg BLOB NOT NULL,
                     wide_jpeg BLOB NOT NULL
                 )
