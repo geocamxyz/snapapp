@@ -31,21 +31,30 @@ class LocationHelper(context: Context) {
     var current: LocationSnapshot? = null
         private set
 
+    private var onLocationCallback: ((LocationSnapshot) -> Unit)? = null
+
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-            result.lastLocation?.let { current = it.toSnapshot() }
+            result.lastLocation?.toSnapshot()?.let {
+                current = it
+                onLocationCallback?.invoke(it)
+            }
         }
     }
 
     @SuppressLint("MissingPermission")
-    fun startUpdates() {
+    fun startUpdates(onLocation: ((LocationSnapshot) -> Unit)? = null) {
+        onLocationCallback = onLocation
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L)
             .setMinUpdateIntervalMillis(2_000L)
             .build()
         client.requestLocationUpdates(request, callback, Looper.getMainLooper())
     }
 
-    fun stopUpdates() = client.removeLocationUpdates(callback)
+    fun stopUpdates() {
+        client.removeLocationUpdates(callback)
+        onLocationCallback = null
+    }
 
     @SuppressLint("MissingPermission")
     suspend fun getLastKnown(): LocationSnapshot? =

@@ -13,6 +13,14 @@ android {
         targetSdk = 35
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
         versionName = "1.0.${System.getenv("VERSION_CODE") ?: "dev"}"
+        ndk { abiFilters += listOf("arm64-v8a") }
+        externalNativeBuild {
+            cmake { cppFlags += listOf("-O3", "-march=armv8-a+simd") }
+        }
+    }
+
+    externalNativeBuild {
+        cmake { path = file("src/main/cpp/CMakeLists.txt") }
     }
 
     signingConfigs {
@@ -68,4 +76,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.play.services.location)
     implementation(libs.androidx.activity.ktx)
+    implementation(libs.tflite)
+    implementation(libs.tflite.support)
+    implementation(libs.tflite.gpu)
+    implementation(libs.osmdroid)
 }

@@ -37,4 +37,15 @@
         android:contentDescription="New session"
         app:srcCompat="@android:drawable/ic_menu_camera" />
 
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabRecognise"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginBottom="88dp"
+        android:layout_marginEnd="16dp"
+        app:fabSize="mini"
+        android:contentDescription="Recognise"
+        app:srcCompat="@android:drawable/ic_menu_search" />
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

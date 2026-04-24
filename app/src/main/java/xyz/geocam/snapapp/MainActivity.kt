@@ -60,6 +60,9 @@ class MainActivity : AppCompatActivity() {
         binding.fabNewSession.setOnClickListener {
             startActivity(Intent(this, SessionActivity::class.java))
         }
+        binding.fabRecognise.setOnClickListener {
+            startActivity(Intent(this, RecognitionActivity::class.java))
+        }
     }
 
     override fun onResume() {
