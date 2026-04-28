@@ -482,30 +482,16 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun confirmCloseSession() {
-        stopWideScan()
         if (sessionDb == null) { finish(); return }
 
-        if (shotCount < MIN_SHOTS) {
-            val remaining = MIN_SHOTS - shotCount
-            AlertDialog.Builder(this)
-                .setTitle("More shots needed")
-                .setMessage(
-                    "Move to a different position and take $remaining more shot${if (remaining > 1) "s" else ""} for triangulation.\n\nClose anyway and discard this session?"
-                )
-                .setPositiveButton("Close anyway") { _, _ ->
-                    sessionDb?.close()
-                    sessionDb = null
-                    finish()
-                }
-                .setNegativeButton("Keep shooting", null)
-                .show()
-            return
-        }
+        val hint = if (shotCount < MIN_SHOTS)
+            "\n\nTip: take at least $MIN_SHOTS burst shots from different positions for triangulation." else ""
 
         AlertDialog.Builder(this)
             .setTitle("Close session")
-            .setMessage("Close this session with $shotCount shot(s)?")
+            .setMessage("Close this session with $shotCount burst shot(s)?$hint")
             .setPositiveButton("Close") { _, _ ->
+                stopWideScan()
                 sessionDb?.close()
                 sessionDb = null
                 finish()
