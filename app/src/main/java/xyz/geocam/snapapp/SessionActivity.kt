@@ -30,6 +30,8 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
@@ -62,6 +64,8 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private var capturing = false
     private var sliderTracking = false
     private var guideAnimRunning = false
+    private var wideScanJob: Job? = null
+    private var wideScanCount = 0
 
     private var currentBearing = Float.NaN
     private var bearingAccuracyDeg = Float.NaN
@@ -127,6 +131,9 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
 
         binding.buttonCapture.setOnClickListener {
             if (!capturing) captureShot()
+        }
+        binding.buttonWideScan.setOnClickListener {
+            if (wideScanJob == null) startWideScan() else stopWideScan()
         }
         binding.buttonCloseSession.setOnClickListener { confirmCloseSession() }
 
@@ -282,14 +289,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
             binding.progressCapture.visibility = View.VISIBLE
 
             try {
-                if (sessionDb == null) {
-                    val name = buildSessionName()
-                    sessionName = name
-                    val dbFile = File(filesDir, "$name.db")
-                    sessionDb = SessionDb.create(dbFile)
-                    sessionDb!!.setMeta("session_start", System.currentTimeMillis().toString())
-                    sessionDb!!.setMeta("app_version", BuildConfig.VERSION_NAME)
-                }
+                ensureSessionDb()
 
                 val captureZoom = cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f
                 val halfZoom = 1f + (captureZoom - 1f) * 0.5f
@@ -423,7 +423,66 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         return name
     }
 
+    private fun startWideScan() {
+        val cam = camera ?: return
+        val ic  = imageCapture ?: return
+        wideScanCount = 0
+
+        wideScanJob = lifecycleScope.launch {
+            val savedZoom = cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f
+            try {
+                cam.cameraControl.setZoomRatio(1f).await()
+                binding.buttonCapture.isEnabled = false
+                binding.buttonWideScan.setTextColor(
+                    ContextCompat.getColor(this@SessionActivity, R.color.status_error))
+
+                while (true) {
+                    val ts = System.currentTimeMillis()
+                    val f  = File(cacheDir, "wide_scan_tmp.jpg")
+                    shutterSound.play(MediaActionSound.SHUTTER_CLICK)
+                    takePicture(ic, f)
+                    val jpeg = f.readBytes().also { f.delete() }
+
+                    ensureSessionDb()
+                    val loc = locationHelper.current ?: locationHelper.getLastKnown()
+                    sessionDb!!.insertWideScanFrame(ts, loc?.latitude, loc?.longitude, jpeg)
+
+                    wideScanCount++
+                    binding.buttonWideScan.text = "■ $wideScanCount"
+                    delay(500)
+                }
+            } finally {
+                withContext(NonCancellable) {
+                    cam.cameraControl.setZoomRatio(savedZoom).await()
+                }
+                withContext(Dispatchers.Main) {
+                    binding.buttonWideScan.text = getString(R.string.wide_scan)
+                    binding.buttonWideScan.setTextColor(
+                        ContextCompat.getColor(this@SessionActivity, android.R.color.white))
+                    binding.buttonCapture.isEnabled = !capturing
+                    wideScanJob = null
+                }
+            }
+        }
+    }
+
+    private fun stopWideScan() {
+        wideScanJob?.cancel()
+        // UI reset handled in the finally block of startWideScan
+    }
+
+    private suspend fun ensureSessionDb() {
+        if (sessionDb != null) return
+        val name = buildSessionName()
+        sessionName = name
+        val dbFile = File(filesDir, "$name.db")
+        sessionDb = SessionDb.create(dbFile)
+        sessionDb!!.setMeta("session_start", System.currentTimeMillis().toString())
+        sessionDb!!.setMeta("app_version", BuildConfig.VERSION_NAME)
+    }
+
     private fun confirmCloseSession() {
+        stopWideScan()
         if (sessionDb == null) { finish(); return }
 
         if (shotCount < MIN_SHOTS) {

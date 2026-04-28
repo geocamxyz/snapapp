@@ -81,6 +81,16 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
         ).use { c -> return if (c.moveToFirst()) c.getBlob(0) else null }
     }
 
+    fun insertWideScanFrame(capturedAt: Long, lat: Double?, lon: Double?, jpeg: ByteArray) {
+        val cv = ContentValues().apply {
+            put("captured_at", capturedAt)
+            if (lat != null) put("lat", lat) else putNull("lat")
+            if (lon != null) put("lon", lon) else putNull("lon")
+            put("jpeg", jpeg)
+        }
+        db.insertOrThrow("wide_scan_frames", null, cv)
+    }
+
     fun deleteShot(shotId: Long) {
         db.beginTransaction()
         try {
@@ -130,6 +140,15 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     shot_id INTEGER NOT NULL REFERENCES shots(id),
                     frame_index INTEGER NOT NULL,
+                    jpeg BLOB NOT NULL
+                )
+            """.trimIndent())
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS wide_scan_frames (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    captured_at INTEGER NOT NULL,
+                    lat REAL,
+                    lon REAL,
                     jpeg BLOB NOT NULL
                 )
             """.trimIndent())
