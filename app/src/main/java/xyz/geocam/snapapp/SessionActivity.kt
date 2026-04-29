@@ -449,6 +449,8 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
 
                     wideScanCount++
                     binding.buttonWideScan.text = "■ $wideScanCount"
+                    binding.textScanCount.text = "Scan: $wideScanCount"
+                    binding.textScanCount.visibility = View.VISIBLE
                     delay(500)
                 }
             } finally {
@@ -484,12 +486,13 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private fun confirmCloseSession() {
         if (sessionDb == null) { finish(); return }
 
+        val scanLine = if (wideScanCount > 0) "\n$wideScanCount wide scan frame(s)" else ""
         val hint = if (shotCount < MIN_SHOTS)
             "\n\nTip: take at least $MIN_SHOTS burst shots from different positions for triangulation." else ""
 
         AlertDialog.Builder(this)
             .setTitle("Close session")
-            .setMessage("Close this session with $shotCount burst shot(s)?$hint")
+            .setMessage("Close this session?\n$shotCount burst shot(s)$scanLine$hint")
             .setPositiveButton("Close") { _, _ ->
                 stopWideScan()
                 sessionDb?.close()
