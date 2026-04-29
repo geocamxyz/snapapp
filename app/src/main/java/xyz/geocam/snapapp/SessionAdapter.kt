@@ -40,6 +40,11 @@ class SessionAdapter(
     private val statusOverrides = mutableMapOf<String, UploadStatus>()
     private val progressOverrides = mutableMapOf<String, Int>()
     private val projectUrlOverrides = mutableMapOf<String, String>()
+    private val errorMessages = mutableMapOf<String, String>()
+
+    fun updateError(name: String, message: String) {
+        errorMessages[name] = message
+    }
     // Cache key = "$sessionPath:$shotId" to avoid cross-session collisions
     private val thumbnailCache = HashMap<String, Bitmap?>()
     private val deleteMode = mutableSetOf<String>()
@@ -85,9 +90,18 @@ class SessionAdapter(
 
             b.imageStatus.setImageResource(status.iconRes())
             b.imageStatus.contentDescription = status.name
-            // Tapping the status icon retries when not currently uploading
             b.imageStatus.setOnClickListener {
-                if (!activelyUploading) onUpload(item)
+                if (status == UploadStatus.ERROR) {
+                    val msg = errorMessages[item.name] ?: "No details recorded."
+                    androidx.appcompat.app.AlertDialog.Builder(itemView.context)
+                        .setTitle("Upload failed")
+                        .setMessage(msg)
+                        .setPositiveButton("Retry") { _, _ -> onUpload(item) }
+                        .setNegativeButton("Dismiss", null)
+                        .show()
+                } else if (!activelyUploading) {
+                    onUpload(item)
+                }
             }
 
             val inDelete = item.name in deleteMode

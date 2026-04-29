@@ -73,6 +73,9 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().remove("regen_thumbnails").apply()
             adapter.clearThumbnailCache()
         }
+        getSharedPreferences("upload_errors", MODE_PRIVATE).all.forEach { (k, v) ->
+            if (v is String) adapter.updateError(k, v)
+        }
         loadSessions(forceRebindThumbnails = regenThumbnails)
     }
 
@@ -212,10 +215,13 @@ class MainActivity : AppCompatActivity() {
                 }
                 is UploadResult.Failure -> {
                     statusPrefs.edit().putString(session.name, "ERROR").apply()
+                    getSharedPreferences("upload_errors", MODE_PRIVATE)
+                        .edit().putString(session.name, result.message).apply()
+                    adapter.updateError(session.name, result.message)
                     adapter.updateStatus(session.name, UploadStatus.ERROR)
                     Toast.makeText(
                         this@MainActivity,
-                        "Upload failed: ${result.message}",
+                        "Upload failed — tap the icon for details",
                         Toast.LENGTH_LONG
                     ).show()
                 }

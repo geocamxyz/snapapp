@@ -23,7 +23,7 @@ class SessionUploader(private val context: Context) {
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(300, TimeUnit.SECONDS)  // final chunk triggers server processing — needs time
         .writeTimeout(300, TimeUnit.SECONDS)
         .build()
 
