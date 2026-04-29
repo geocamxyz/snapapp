@@ -77,7 +77,8 @@ class SessionAdapter(
             val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(item.lastModified))
             val size = formatSize(item.fileSizeBytes)
             val shots = "${item.shotCount} shot${if (item.shotCount == 1) "" else "s"}"
-            b.textMeta.text = "$date  ·  $size  ·  $shots"
+            val scan = if (item.wideScanFrameIds.isNotEmpty()) "  ·  ${item.wideScanFrameIds.size} scan" else ""
+            b.textMeta.text = "$date  ·  $size  ·  $shots$scan"
 
             val status = statusOverrides[item.name] ?: item.uploadStatus
             val activelyUploading = isUploading(item.name)
@@ -140,13 +141,14 @@ class SessionAdapter(
         private fun bindThumbnails(item: SessionFile) {
             val strip = b.thumbnailStrip
             strip.removeAllViews()
-            if (item.shotIds.isEmpty()) return
+            if (item.shotIds.isEmpty() && item.wideScanFrameIds.isEmpty()) return
 
             val ctx = strip.context
             val sizePx = (72 * ctx.resources.displayMetrics.density).toInt()
             val gapPx = (4 * ctx.resources.displayMetrics.density).toInt()
 
-            val entries = item.shotIds.map { shotId ->
+            // Burst shot thumbnails (long-press to delete)
+            val burstEntries = item.shotIds.map { shotId ->
                 val key = cacheKey(item.path, shotId)
                 val inDeleteMode = thumbnailDeleteMode.contains(key)
                 val thumb = ImageView(ctx).apply {
@@ -161,7 +163,6 @@ class SessionAdapter(
                         if (thumbnailCache.containsKey(key)) setImageBitmap(thumbnailCache[key])
                     }
                 }
-
                 thumb.setOnLongClickListener {
                     val nowDelete = !thumbnailDeleteMode.contains(key)
                     if (nowDelete) thumbnailDeleteMode.add(key) else thumbnailDeleteMode.remove(key)
@@ -171,35 +172,61 @@ class SessionAdapter(
                 thumb.setOnClickListener {
                     if (thumbnailDeleteMode.contains(key)) onDeleteShot(item, shotId)
                 }
-
                 strip.addView(thumb)
                 key to shotId
             }
 
-            val uncachedIds = entries
+            // Wide scan frame thumbnails (display only, capped at 8)
+            val scanIds = item.wideScanFrameIds.take(8)
+            val scanEntries = scanIds.map { frameId ->
+                val key = "scan:${cacheKey(item.path, frameId)}"
+                val thumb = ImageView(ctx).apply {
+                    layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply { rightMargin = gapPx }
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    tag = key
+                    setBackgroundColor(0xFF1A2A1A.toInt()) // dark green tint to distinguish
+                    if (thumbnailCache.containsKey(key)) setImageBitmap(thumbnailCache[key])
+                }
+                strip.addView(thumb)
+                key to frameId
+            }
+
+            val uncachedBurst = burstEntries
                 .filter { (key, _) -> !thumbnailCache.containsKey(key) && !thumbnailDeleteMode.contains(key) }
                 .map { (_, shotId) -> shotId }
+            val uncachedScan = scanEntries
+                .filter { (key, _) -> !thumbnailCache.containsKey(key) }
+                .map { (_, frameId) -> frameId }
 
-            if (uncachedIds.isEmpty()) return
+            if (uncachedBurst.isEmpty() && uncachedScan.isEmpty()) return
 
             scope.launch {
                 val loaded = withContext(Dispatchers.IO) {
                     try {
                         SessionDb.openReadOnly(File(item.path)).use { db ->
-                            uncachedIds.associateWith { shotId ->
-                                db.loadThumbnail(shotId)?.let { bytes -> decodeThumbnail(bytes) }
+                            val burst = uncachedBurst.associateWith { shotId ->
+                                db.loadThumbnail(shotId)?.let { decodeThumbnail(it) }
                             }
+                            val scan = uncachedScan.associateWith { frameId ->
+                                db.loadWideScanThumbnail(frameId)?.let { decodeThumbnail(it) }
+                            }
+                            burst to scan
                         }
                     } catch (e: Exception) {
-                        emptyMap()
+                        emptyMap<Long, Bitmap?>() to emptyMap<Long, Bitmap?>()
                     }
                 }
-                loaded.forEach { (shotId, bitmap) ->
+                loaded.first.forEach { (shotId, bitmap) ->
                     val key = cacheKey(item.path, shotId)
                     thumbnailCache[key] = bitmap
                     if (!thumbnailDeleteMode.contains(key)) {
                         strip.findViewWithTag<ImageView>(key)?.setImageBitmap(bitmap)
                     }
+                }
+                loaded.second.forEach { (frameId, bitmap) ->
+                    val key = "scan:${cacheKey(item.path, frameId)}"
+                    thumbnailCache[key] = bitmap
+                    strip.findViewWithTag<ImageView>(key)?.setImageBitmap(bitmap)
                 }
             }
         }

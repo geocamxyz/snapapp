@@ -71,7 +71,24 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
                 }
             }
         }
-        return SessionInfo(shotIds.size, firstLat, firstLon, shotIds)
+        val wideScanIds = mutableListOf<Long>()
+        db.rawQuery("SELECT id, lat, lon FROM wide_scan_frames ORDER BY captured_at ASC", null).use { c ->
+            while (c.moveToNext()) {
+                wideScanIds.add(c.getLong(0))
+                if (firstLat == null && !c.isNull(1)) {
+                    firstLat = c.getDouble(1)
+                    firstLon = if (!c.isNull(2)) c.getDouble(2) else null
+                }
+            }
+        }
+        return SessionInfo(shotIds.size, firstLat, firstLon, shotIds, wideScanIds)
+    }
+
+    fun loadWideScanThumbnail(frameId: Long): ByteArray? {
+        db.rawQuery(
+            "SELECT jpeg FROM wide_scan_frames WHERE id=?",
+            arrayOf(frameId.toString())
+        ).use { c -> return if (c.moveToFirst()) c.getBlob(0) else null }
     }
 
     fun loadThumbnail(shotId: Long): ByteArray? {

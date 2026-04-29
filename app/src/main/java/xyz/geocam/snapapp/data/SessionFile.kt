@@ -14,7 +14,8 @@ data class SessionFile(
     val shotCount: Int,
     val firstLat: Double?,
     val firstLon: Double?,
-    val shotIds: List<Long>
+    val shotIds: List<Long>,
+    val wideScanFrameIds: List<Long>
 ) {
     companion object {
         fun fromFile(
@@ -29,6 +30,7 @@ data class SessionFile(
             var firstLat: Double? = null
             var firstLon: Double? = null
             var shotIds: List<Long> = emptyList()
+            var wideScanFrameIds: List<Long> = emptyList()
             try {
                 val db = SessionDb.openReadOnly(file)
                 val info = db.getInfo()
@@ -37,6 +39,7 @@ data class SessionFile(
                 firstLat = info.firstLat
                 firstLon = info.firstLon
                 shotIds = info.shotIds
+                wideScanFrameIds = info.wideScanFrameIds
             } catch (_: Exception) {}
 
             return SessionFile(
@@ -49,7 +52,8 @@ data class SessionFile(
                 shotCount = shotCount,
                 firstLat = firstLat,
                 firstLon = firstLon,
-                shotIds = shotIds
+                shotIds = shotIds,
+                wideScanFrameIds = wideScanFrameIds
             )
         }
     }

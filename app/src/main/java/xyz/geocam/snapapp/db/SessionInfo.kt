@@ -4,5 +4,6 @@ data class SessionInfo(
     val shotCount: Int,
     val firstLat: Double?,
     val firstLon: Double?,
-    val shotIds: List<Long>
+    val shotIds: List<Long>,
+    val wideScanFrameIds: List<Long>
 )
