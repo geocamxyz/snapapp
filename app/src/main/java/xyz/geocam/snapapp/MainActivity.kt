@@ -184,16 +184,8 @@ class MainActivity : AppCompatActivity() {
         // If already uploading in this process, ignore tap
         if (activeUploads.containsKey(session.name)) return
 
-        if (session.shotCount == 0) {
-            androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("No burst shots")
-                .setMessage(
-                    "This session has ${session.wideScanFrameIds.size} wide scan frame(s) but no burst shots.\n\n" +
-                    "The server requires at least one burst shot to process a session. " +
-                    "Take burst shots from different positions before uploading."
-                )
-                .setPositiveButton("OK", null)
-                .show()
+        if (session.shotIds.isEmpty() && session.wideScanFrameIds.isEmpty()) {
+            Toast.makeText(this, "No shots to upload", Toast.LENGTH_SHORT).show()
             return
         }
 

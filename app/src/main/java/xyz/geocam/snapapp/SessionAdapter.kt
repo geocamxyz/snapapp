@@ -81,9 +81,9 @@ class SessionAdapter(
 
             val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(item.lastModified))
             val size = formatSize(item.fileSizeBytes)
-            val shots = "${item.shotCount} shot${if (item.shotCount == 1) "" else "s"}"
-            val scan = if (item.wideScanFrameIds.isNotEmpty()) "  ·  ${item.wideScanFrameIds.size} scan" else ""
-            b.textMeta.text = "$date  ·  $size  ·  $shots$scan"
+            val total = item.shotIds.size + item.wideScanFrameIds.size
+            val shots = "$total shot${if (total == 1) "" else "s"}"
+            b.textMeta.text = "$date  ·  $size  ·  $shots"
 
             val status = statusOverrides[item.name] ?: item.uploadStatus
             val activelyUploading = isUploading(item.name)

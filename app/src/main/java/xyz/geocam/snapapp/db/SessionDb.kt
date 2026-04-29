@@ -16,7 +16,8 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
         widePrejpeg: ByteArray,
         burstFrames: List<ByteArray>,
         midJpeg: ByteArray,
-        wideJpeg: ByteArray
+        wideJpeg: ByteArray,
+        isWideScan: Boolean = false
     ): Long {
         db.beginTransaction()
         try {
@@ -34,6 +35,7 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
                 put("wide_pre_jpeg", widePrejpeg)
                 put("mid_jpeg", midJpeg)
                 put("wide_jpeg", wideJpeg)
+                put("is_wide_scan", if (isWideScan) 1 else 0)
             }
             val shotId = db.insertOrThrow("shots", null, cv)
 
@@ -53,42 +55,79 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
         }
     }
 
+    // Wide scan frames are stored as shots so the server always has images to process.
+    // is_wide_scan=1 lets the client distinguish them for triangulation guidance.
+    fun insertWideScanFrame(capturedAt: Long, lat: Double?, lon: Double?, jpeg: ByteArray) {
+        insertShot(
+            capturedAt = capturedAt,
+            lat = lat, lon = lon,
+            accuracyM = null, altitudeM = null,
+            locationSource = null, locationTimeMs = null,
+            bearingDeg = null, bearingAccuracyDeg = null,
+            zoomRatio = 1f,
+            widePrejpeg = jpeg,
+            burstFrames = listOf(jpeg),
+            midJpeg = jpeg,
+            wideJpeg = jpeg,
+            isWideScan = true
+        )
+    }
+
+    // Counts only burst shots (is_wide_scan=0); used for triangulation guidance.
     fun getShotCount(): Int {
-        val cursor = db.rawQuery("SELECT COUNT(*) FROM shots", null)
-        return cursor.use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        return try {
+            db.rawQuery("SELECT COUNT(*) FROM shots WHERE is_wide_scan = 0", null)
+                .use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        } catch (e: Exception) {
+            // Old DB without is_wide_scan column — all shots are burst shots
+            db.rawQuery("SELECT COUNT(*) FROM shots", null)
+                .use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        }
     }
 
     fun getInfo(): SessionInfo {
         val shotIds = mutableListOf<Long>()
+        var burstCount = 0
         var firstLat: Double? = null
         var firstLon: Double? = null
-        db.rawQuery("SELECT id, lat, lon FROM shots ORDER BY captured_at ASC", null).use { c ->
-            while (c.moveToNext()) {
-                shotIds.add(c.getLong(0))
-                if (firstLat == null && !c.isNull(1)) {
-                    firstLat = c.getDouble(1)
-                    firstLon = if (!c.isNull(2)) c.getDouble(2) else null
+        try {
+            db.rawQuery("SELECT id, lat, lon, is_wide_scan FROM shots ORDER BY captured_at ASC", null).use { c ->
+                while (c.moveToNext()) {
+                    shotIds.add(c.getLong(0))
+                    if (c.getInt(3) == 0) burstCount++
+                    if (firstLat == null && !c.isNull(1)) {
+                        firstLat = c.getDouble(1)
+                        firstLon = if (!c.isNull(2)) c.getDouble(2) else null
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Old DB without is_wide_scan column
+            db.rawQuery("SELECT id, lat, lon FROM shots ORDER BY captured_at ASC", null).use { c ->
+                while (c.moveToNext()) {
+                    shotIds.add(c.getLong(0))
+                    burstCount++
+                    if (firstLat == null && !c.isNull(1)) {
+                        firstLat = c.getDouble(1)
+                        firstLon = if (!c.isNull(2)) c.getDouble(2) else null
+                    }
                 }
             }
         }
+        // Backward compat: old sessions may have data in wide_scan_frames table
         val wideScanIds = mutableListOf<Long>()
-        db.rawQuery("SELECT id, lat, lon FROM wide_scan_frames ORDER BY captured_at ASC", null).use { c ->
-            while (c.moveToNext()) {
-                wideScanIds.add(c.getLong(0))
-                if (firstLat == null && !c.isNull(1)) {
-                    firstLat = c.getDouble(1)
-                    firstLon = if (!c.isNull(2)) c.getDouble(2) else null
+        try {
+            db.rawQuery("SELECT id, lat, lon FROM wide_scan_frames ORDER BY captured_at ASC", null).use { c ->
+                while (c.moveToNext()) {
+                    wideScanIds.add(c.getLong(0))
+                    if (firstLat == null && !c.isNull(1)) {
+                        firstLat = c.getDouble(1)
+                        firstLon = if (!c.isNull(2)) c.getDouble(2) else null
+                    }
                 }
             }
-        }
-        return SessionInfo(shotIds.size, firstLat, firstLon, shotIds, wideScanIds)
-    }
-
-    fun loadWideScanThumbnail(frameId: Long): ByteArray? {
-        db.rawQuery(
-            "SELECT jpeg FROM wide_scan_frames WHERE id=?",
-            arrayOf(frameId.toString())
-        ).use { c -> return if (c.moveToFirst()) c.getBlob(0) else null }
+        } catch (e: Exception) { /* table may not exist in very old DBs */ }
+        return SessionInfo(burstCount, firstLat, firstLon, shotIds, wideScanIds)
     }
 
     fun loadThumbnail(shotId: Long): ByteArray? {
@@ -98,14 +137,11 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
         ).use { c -> return if (c.moveToFirst()) c.getBlob(0) else null }
     }
 
-    fun insertWideScanFrame(capturedAt: Long, lat: Double?, lon: Double?, jpeg: ByteArray) {
-        val cv = ContentValues().apply {
-            put("captured_at", capturedAt)
-            if (lat != null) put("lat", lat) else putNull("lat")
-            if (lon != null) put("lon", lon) else putNull("lon")
-            put("jpeg", jpeg)
-        }
-        db.insertOrThrow("wide_scan_frames", null, cv)
+    fun loadWideScanThumbnail(frameId: Long): ByteArray? {
+        db.rawQuery(
+            "SELECT jpeg FROM wide_scan_frames WHERE id=?",
+            arrayOf(frameId.toString())
+        ).use { c -> return if (c.moveToFirst()) c.getBlob(0) else null }
     }
 
     fun deleteShot(shotId: Long) {
@@ -149,7 +185,8 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
                     zoom_ratio REAL NOT NULL,
                     wide_pre_jpeg BLOB NOT NULL,
                     mid_jpeg BLOB NOT NULL,
-                    wide_jpeg BLOB NOT NULL
+                    wide_jpeg BLOB NOT NULL,
+                    is_wide_scan INTEGER NOT NULL DEFAULT 0
                 )
             """.trimIndent())
             db.execSQL("""
