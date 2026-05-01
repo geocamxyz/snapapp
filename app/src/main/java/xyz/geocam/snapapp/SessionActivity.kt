@@ -66,6 +66,8 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private var guideAnimRunning = false
     private var calibrationJob: Job? = null
     private var calibrationCount = 0
+    private var rapidJob: Job? = null
+    private var rapidCount = 0
 
     private var currentBearing = Float.NaN
     private var bearingAccuracyDeg = Float.NaN
@@ -134,6 +136,9 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         }
         binding.buttonWideScan.setOnClickListener {
             if (calibrationJob == null) startCalibration() else stopCalibration()
+        }
+        binding.buttonRapid.setOnClickListener {
+            if (rapidJob == null) startRapidFire() else stopRapidFire()
         }
         binding.buttonCloseSession.setOnClickListener { confirmCloseSession() }
 
@@ -483,7 +488,67 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
 
     private fun stopCalibration() {
         calibrationJob?.cancel()
-        // UI reset handled in the finally block of startCalibration
+    }
+
+    private fun startRapidFire() {
+        val cam = camera ?: return
+        val ic  = imageCapture ?: return
+        rapidCount = 0
+
+        val captureZoom = cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f
+        val midZoom = 1f + (captureZoom - 1f) * 0.5f
+        val zoomCycle = listOf(1f, midZoom, captureZoom)
+
+        calibrationJob?.cancel()  // can't run both simultaneously
+
+        rapidJob = lifecycleScope.launch {
+            val savedZoom = captureZoom
+            try {
+                ensureSessionDb()
+                sessionDb!!.setMeta("session_type", "rapid_fire")
+
+                binding.buttonCapture.isEnabled = false
+                binding.buttonWideScan.isEnabled = false
+                binding.buttonRapid.setTextColor(
+                    ContextCompat.getColor(this@SessionActivity, R.color.status_error))
+
+                var idx = 0
+                while (true) {
+                    val targetZoom = zoomCycle[idx % 3]
+                    cam.cameraControl.setZoomRatio(targetZoom).await()
+
+                    val ts = System.currentTimeMillis()
+                    val f  = File(cacheDir, "rapid_tmp.jpg")
+                    shutterSound.play(MediaActionSound.SHUTTER_CLICK)
+                    takePicture(ic, f)
+                    val jpeg = f.readBytes().also { f.delete() }
+
+                    val loc = locationHelper.current ?: locationHelper.getLastKnown()
+                    sessionDb!!.insertCalibrationShot(ts, loc?.latitude, loc?.longitude, jpeg, targetZoom)
+
+                    rapidCount++
+                    binding.buttonRapid.text = "■ $rapidCount"
+
+                    idx++
+                }
+            } finally {
+                withContext(NonCancellable) {
+                    cam.cameraControl.setZoomRatio(savedZoom).await()
+                }
+                withContext(Dispatchers.Main) {
+                    binding.buttonRapid.text = getString(R.string.rapid_fire)
+                    binding.buttonRapid.setTextColor(
+                        ContextCompat.getColor(this@SessionActivity, android.R.color.white))
+                    binding.buttonCapture.isEnabled = !capturing
+                    binding.buttonWideScan.isEnabled = true
+                    rapidJob = null
+                }
+            }
+        }
+    }
+
+    private fun stopRapidFire() {
+        rapidJob?.cancel()
     }
 
     private suspend fun ensureSessionDb() {
@@ -499,7 +564,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private fun confirmCloseSession() {
         if (sessionDb == null) { finish(); return }
 
-        val scanLine = if (wideScanCount > 0) "\n$wideScanCount wide scan frame(s)" else ""
+        val scanLine = if (calibrationCount > 0) "\n$calibrationCount calibration frame(s)" else ""
         val hint = if (shotCount < MIN_SHOTS)
             "\n\nTip: take at least $MIN_SHOTS burst shots from different positions for triangulation." else ""
 
@@ -508,6 +573,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
             .setMessage("Close this session?\n$shotCount burst shot(s)$scanLine$hint")
             .setPositiveButton("Close") { _, _ ->
                 stopCalibration()
+                stopRapidFire()
                 sessionDb?.close()
                 sessionDb = null
                 finish()

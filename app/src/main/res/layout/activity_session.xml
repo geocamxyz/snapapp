@@ -58,7 +58,7 @@
             android:layout_marginTop="16dp"
             android:text="@string/guide_tap_skip"
             android:textColor="#99FFFFFF"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
 
     </FrameLayout>
 
@@ -168,7 +168,7 @@
             android:layout_height="wrap_content"
             android:text="W"
             android:textColor="#99FFFFFF"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:layout_marginEnd="8dp" />
 
         <SeekBar
@@ -184,7 +184,7 @@
             android:layout_height="wrap_content"
             android:text="T"
             android:textColor="#99FFFFFF"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:layout_marginStart="8dp" />
 
     </LinearLayout>
@@ -211,7 +211,7 @@
             android:layout_weight="1"
             android:text="@string/close_session"
             android:textColor="@android:color/white"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
 
         <Button
             android:id="@+id/buttonWideScan"
@@ -222,7 +222,18 @@
             android:layout_marginHorizontal="4dp"
             android:text="@string/calibration_mode"
             android:textColor="@android:color/white"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/buttonRapid"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="4dp"
+            android:text="@string/rapid_fire"
+            android:textColor="@android:color/white"
+            android:textSize="11sp" />
 
         <Button
             android:id="@+id/buttonCapture"
@@ -231,7 +242,7 @@
             android:layout_weight="1"
             android:layout_marginHorizontal="4dp"
             android:text="@string/capture"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
 
     </LinearLayout>
 
