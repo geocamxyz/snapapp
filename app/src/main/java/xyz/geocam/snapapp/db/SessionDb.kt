@@ -55,16 +55,16 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
         }
     }
 
-    // Wide scan frames are stored as shots so the server always has images to process.
-    // is_wide_scan=1 lets the client distinguish them for triangulation guidance.
-    fun insertWideScanFrame(capturedAt: Long, lat: Double?, lon: Double?, jpeg: ByteArray) {
+    // Calibration shots orbit an object alternating wide/mid zoom.
+    // is_wide_scan=1 marks them as non-triangulation so MIN_SHOTS guidance is unaffected.
+    fun insertCalibrationShot(capturedAt: Long, lat: Double?, lon: Double?, jpeg: ByteArray, zoomRatio: Float) {
         insertShot(
             capturedAt = capturedAt,
             lat = lat, lon = lon,
             accuracyM = null, altitudeM = null,
             locationSource = null, locationTimeMs = null,
             bearingDeg = null, bearingAccuracyDeg = null,
-            zoomRatio = 1f,
+            zoomRatio = zoomRatio,
             widePrejpeg = jpeg,
             burstFrames = listOf(jpeg),
             midJpeg = jpeg,

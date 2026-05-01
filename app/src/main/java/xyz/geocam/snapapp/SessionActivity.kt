@@ -64,8 +64,8 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private var capturing = false
     private var sliderTracking = false
     private var guideAnimRunning = false
-    private var wideScanJob: Job? = null
-    private var wideScanCount = 0
+    private var calibrationJob: Job? = null
+    private var calibrationCount = 0
 
     private var currentBearing = Float.NaN
     private var bearingAccuracyDeg = Float.NaN
@@ -133,7 +133,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
             if (!capturing) captureShot()
         }
         binding.buttonWideScan.setOnClickListener {
-            if (wideScanJob == null) startWideScan() else stopWideScan()
+            if (calibrationJob == null) startCalibration() else stopCalibration()
         }
         binding.buttonCloseSession.setOnClickListener { confirmCloseSession() }
 
@@ -423,54 +423,67 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         return name
     }
 
-    private fun startWideScan() {
+    private fun startCalibration() {
         val cam = camera ?: return
         val ic  = imageCapture ?: return
-        wideScanCount = 0
+        calibrationCount = 0
 
-        wideScanJob = lifecycleScope.launch {
+        // Alternate between 1× (wide) and the user's current zoom (min 2×)
+        val midZoom = maxOf(cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f, 2f)
+
+        Toast.makeText(this, getString(R.string.calibration_guide), Toast.LENGTH_LONG).show()
+
+        calibrationJob = lifecycleScope.launch {
             val savedZoom = cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f
             try {
-                cam.cameraControl.setZoomRatio(1f).await()
+                ensureSessionDb()
+                sessionDb!!.setMeta("session_type", "calibration")
+
                 binding.buttonCapture.isEnabled = false
                 binding.buttonWideScan.setTextColor(
                     ContextCompat.getColor(this@SessionActivity, R.color.status_error))
 
+                var wideNext = true
                 while (true) {
+                    val targetZoom = if (wideNext) 1f else midZoom
+                    cam.cameraControl.setZoomRatio(targetZoom).await()
+                    delay(200) // let lens settle
+
                     val ts = System.currentTimeMillis()
-                    val f  = File(cacheDir, "wide_scan_tmp.jpg")
+                    val f  = File(cacheDir, "cal_tmp.jpg")
                     shutterSound.play(MediaActionSound.SHUTTER_CLICK)
                     takePicture(ic, f)
                     val jpeg = f.readBytes().also { f.delete() }
 
-                    ensureSessionDb()
                     val loc = locationHelper.current ?: locationHelper.getLastKnown()
-                    sessionDb!!.insertWideScanFrame(ts, loc?.latitude, loc?.longitude, jpeg)
+                    sessionDb!!.insertCalibrationShot(ts, loc?.latitude, loc?.longitude, jpeg, targetZoom)
 
-                    wideScanCount++
-                    binding.buttonWideScan.text = "■ $wideScanCount"
-                    binding.textScanCount.text = "Scan: $wideScanCount"
+                    calibrationCount++
+                    binding.buttonWideScan.text = getString(R.string.calibration_stop, calibrationCount)
+                    binding.textScanCount.text = "Cal: $calibrationCount"
                     binding.textScanCount.visibility = View.VISIBLE
-                    delay(500)
+
+                    wideNext = !wideNext
+                    delay(300) // 200ms settle + 300ms = ~500ms between shots
                 }
             } finally {
                 withContext(NonCancellable) {
                     cam.cameraControl.setZoomRatio(savedZoom).await()
                 }
                 withContext(Dispatchers.Main) {
-                    binding.buttonWideScan.text = getString(R.string.wide_scan)
+                    binding.buttonWideScan.text = getString(R.string.calibration_mode)
                     binding.buttonWideScan.setTextColor(
                         ContextCompat.getColor(this@SessionActivity, android.R.color.white))
                     binding.buttonCapture.isEnabled = !capturing
-                    wideScanJob = null
+                    calibrationJob = null
                 }
             }
         }
     }
 
-    private fun stopWideScan() {
-        wideScanJob?.cancel()
-        // UI reset handled in the finally block of startWideScan
+    private fun stopCalibration() {
+        calibrationJob?.cancel()
+        // UI reset handled in the finally block of startCalibration
     }
 
     private suspend fun ensureSessionDb() {
@@ -494,7 +507,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
             .setTitle("Close session")
             .setMessage("Close this session?\n$shotCount burst shot(s)$scanLine$hint")
             .setPositiveButton("Close") { _, _ ->
-                stopWideScan()
+                stopCalibration()
                 sessionDb?.close()
                 sessionDb = null
                 finish()
