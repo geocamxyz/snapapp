@@ -541,7 +541,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                     binding.buttonWideScan.text = getString(R.string.calibration_mode)
                     binding.buttonWideScan.setTextColor(
                         ContextCompat.getColor(this@SessionActivity, android.R.color.white))
-                    binding.buttonCapture.isEnabled = !capturing
+                    binding.buttonCapture.isEnabled = captureJob == null
                     calibrationJob = null
                 }
             }
