@@ -149,47 +149,67 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@id/zoomBar" />
 
-    <!-- zoom slider row -->
+    <!-- fixed zoom buttons replacing the slider -->
     <LinearLayout
         android:id="@+id/zoomBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
+        android:gravity="center"
         android:background="#CC000000"
-        android:paddingHorizontal="16dp"
+        android:paddingHorizontal="8dp"
         android:paddingVertical="4dp"
         app:layout_constraintBottom_toTopOf="@id/bottomBar"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="W"
-            android:textColor="#99FFFFFF"
-            android:textSize="11sp"
-            android:layout_marginEnd="8dp" />
-
-        <SeekBar
-            android:id="@+id/seekZoom"
+        <Button
+            android:id="@+id/buttonZoom1x"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="36dp"
             android:layout_weight="1"
-            android:max="1000"
-            android:progress="0" />
+            android:layout_marginHorizontal="4dp"
+            android:text="1×"
+            android:textColor="@android:color/white"
+            android:textSize="13sp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="T"
+        <Button
+            android:id="@+id/buttonZoom2x"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="4dp"
+            android:text="2×"
             android:textColor="#99FFFFFF"
-            android:textSize="11sp"
-            android:layout_marginStart="8dp" />
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/buttonZoom5x"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="4dp"
+            android:text="5×"
+            android:textColor="#99FFFFFF"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/buttonZoom10x"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="4dp"
+            android:text="10×"
+            android:textColor="#99FFFFFF"
+            android:textSize="13sp" />
 
     </LinearLayout>
 
-    <!-- bottom bar: close | capture -->
+    <!-- bottom bar -->
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="0dp"
@@ -197,8 +217,8 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="@android:color/black"
-        android:paddingHorizontal="8dp"
-        android:paddingVertical="12dp"
+        android:paddingHorizontal="4dp"
+        android:paddingVertical="10dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -211,7 +231,7 @@
             android:layout_weight="1"
             android:text="@string/close_session"
             android:textColor="@android:color/white"
-            android:textSize="11sp" />
+            android:textSize="10sp" />
 
         <Button
             android:id="@+id/buttonWideScan"
@@ -219,10 +239,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginHorizontal="4dp"
+            android:layout_marginHorizontal="2dp"
             android:text="@string/calibration_mode"
             android:textColor="@android:color/white"
-            android:textSize="11sp" />
+            android:textSize="10sp" />
 
         <Button
             android:id="@+id/buttonRapid"
@@ -230,19 +250,30 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginHorizontal="4dp"
+            android:layout_marginHorizontal="2dp"
             android:text="@string/rapid_fire"
             android:textColor="@android:color/white"
-            android:textSize="11sp" />
+            android:textSize="10sp" />
+
+        <Button
+            android:id="@+id/buttonHdr"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="2dp"
+            android:text="@string/hdr_mode"
+            android:textColor="@android:color/white"
+            android:textSize="10sp" />
 
         <Button
             android:id="@+id/buttonCapture"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginHorizontal="4dp"
+            android:layout_marginHorizontal="2dp"
             android:text="@string/capture"
-            android:textSize="11sp" />
+            android:textSize="10sp" />
 
     </LinearLayout>
 

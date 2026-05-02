@@ -21,6 +21,7 @@
     <string name="calibration_guide">Walk slowly around the object in a full circle, keeping it centred</string>
     <string name="calibration_stop">■ Cal %d</string>
     <string name="rapid_fire">Rapid</string>
+    <string name="hdr_mode">HDR</string>
     <string name="guide_instruction">← Sweep right to left, keep subject centred</string>
     <string name="guide_hold">Hold still…</string>
     <string name="guide_tap_skip">Tap to skip</string>

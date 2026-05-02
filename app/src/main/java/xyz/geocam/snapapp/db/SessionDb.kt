@@ -17,7 +17,8 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
         burstFrames: List<ByteArray>,
         midJpeg: ByteArray,
         wideJpeg: ByteArray,
-        isWideScan: Boolean = false
+        isWideScan: Boolean = false,
+        exposureEv: Float = 0f
     ): Long {
         db.beginTransaction()
         try {
@@ -36,6 +37,7 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
                 put("mid_jpeg", midJpeg)
                 put("wide_jpeg", wideJpeg)
                 put("is_wide_scan", if (isWideScan) 1 else 0)
+                put("exposure_ev", exposureEv)
             }
             val shotId = db.insertOrThrow("shots", null, cv)
 
@@ -186,7 +188,8 @@ class SessionDb(private val db: SQLiteDatabase) : AutoCloseable {
                     wide_pre_jpeg BLOB NOT NULL,
                     mid_jpeg BLOB NOT NULL,
                     wide_jpeg BLOB NOT NULL,
-                    is_wide_scan INTEGER NOT NULL DEFAULT 0
+                    is_wide_scan INTEGER NOT NULL DEFAULT 0,
+                    exposure_ev REAL NOT NULL DEFAULT 0
                 )
             """.trimIndent())
             db.execSQL("""
