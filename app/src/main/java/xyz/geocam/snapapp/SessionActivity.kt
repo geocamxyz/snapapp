@@ -65,6 +65,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private var calibrationCount = 0
     private var rapidJob: Job? = null
     private var rapidCount = 0
+    private var selectedZoom = 1f
 
     private var currentBearing = Float.NaN
     private var bearingAccuracyDeg = Float.NaN
@@ -214,6 +215,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun setFixedZoom(ratio: Float) {
+        selectedZoom = ratio
         camera?.cameraControl?.setZoomRatio(ratio)
         listOf(
             binding.buttonZoom1x  to 1f,
@@ -272,13 +274,17 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private fun startCapture() {
         val cam = camera ?: return
         val ic = imageCapture ?: return
+        if (selectedZoom <= 1f) {
+            Toast.makeText(this, "Select a zoom level (2× or higher) before capturing", Toast.LENGTH_SHORT).show()
+            return
+        }
         captureCount = 0
 
         calibrationJob?.cancel()
         rapidJob?.cancel()
 
         captureJob = lifecycleScope.launch {
-            val captureZoom = cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f
+            val captureZoom = selectedZoom
             val halfZoom = 1f + (captureZoom - 1f) * 0.5f
             try {
                 ensureSessionDb()
@@ -342,7 +348,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 withContext(NonCancellable) {
                     cam.cameraControl.setZoomRatio(captureZoom).await()
                 }
-                withContext(Dispatchers.Main) {
+                withContext(NonCancellable + Dispatchers.Main) {
                     binding.textCaptureStatus.text = ""
                     binding.buttonCapture.text = getString(R.string.capture)
                     binding.buttonCapture.setTextColor(
@@ -495,8 +501,8 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         val ic  = imageCapture ?: return
         calibrationCount = 0
 
-        // Alternate between 1× (wide) and the user's current zoom (min 2×)
-        val midZoom = maxOf(cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f, 2f)
+        // Alternate between 1× (wide) and the user's selected zoom (min 2×)
+        val midZoom = maxOf(selectedZoom, 2f)
 
         Toast.makeText(this, getString(R.string.calibration_guide), Toast.LENGTH_LONG).show()
 
@@ -537,7 +543,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 withContext(NonCancellable) {
                     cam.cameraControl.setZoomRatio(savedZoom).await()
                 }
-                withContext(Dispatchers.Main) {
+                withContext(NonCancellable + Dispatchers.Main) {
                     binding.buttonWideScan.text = getString(R.string.calibration_mode)
                     binding.buttonWideScan.setTextColor(
                         ContextCompat.getColor(this@SessionActivity, android.R.color.white))
@@ -557,7 +563,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         val ic  = imageCapture ?: return
         rapidCount = 0
 
-        val captureZoom = cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f
+        val captureZoom = selectedZoom
         val midZoom = 1f + (captureZoom - 1f) * 0.5f
         val zoomCycle = listOf(1f, midZoom, captureZoom)
 
@@ -597,7 +603,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                 withContext(NonCancellable) {
                     cam.cameraControl.setZoomRatio(savedZoom).await()
                 }
-                withContext(Dispatchers.Main) {
+                withContext(NonCancellable + Dispatchers.Main) {
                     binding.buttonRapid.text = getString(R.string.rapid_fire)
                     binding.buttonRapid.setTextColor(
                         ContextCompat.getColor(this@SessionActivity, android.R.color.white))
