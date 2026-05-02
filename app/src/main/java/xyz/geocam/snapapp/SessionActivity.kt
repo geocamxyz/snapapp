@@ -63,8 +63,6 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
     private var guideAnimRunning = false
     private var calibrationJob: Job? = null
     private var calibrationCount = 0
-    private var rapidJob: Job? = null
-    private var rapidCount = 0
     private var selectedZoom = 1f
 
     private var currentBearing = Float.NaN
@@ -115,10 +113,6 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         binding.buttonWideScan.setOnClickListener {
             if (calibrationJob == null) startCalibration() else stopCalibration()
         }
-        binding.buttonRapid.setOnClickListener {
-            if (rapidJob == null) startRapidFire() else stopRapidFire()
-        }
-        binding.buttonHdr.setOnClickListener { captureHdr() }
         binding.buttonCloseSession.setOnClickListener { confirmCloseSession() }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -281,16 +275,13 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         captureCount = 0
 
         calibrationJob?.cancel()
-        rapidJob?.cancel()
 
         captureJob = lifecycleScope.launch {
             val captureZoom = selectedZoom
             val halfZoom = 1f + (captureZoom - 1f) * 0.5f
             try {
                 ensureSessionDb()
-                binding.buttonHdr.isEnabled = false
                 binding.buttonWideScan.isEnabled = false
-                binding.buttonRapid.isEnabled = false
                 binding.buttonCapture.setTextColor(
                     ContextCompat.getColor(this@SessionActivity, R.color.status_error))
 
@@ -353,9 +344,7 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
                     binding.buttonCapture.text = getString(R.string.capture)
                     binding.buttonCapture.setTextColor(
                         ContextCompat.getColor(this@SessionActivity, android.R.color.white))
-                    binding.buttonHdr.isEnabled = true
                     binding.buttonWideScan.isEnabled = true
-                    binding.buttonRapid.isEnabled = true
                     captureJob = null
                 }
             }
@@ -364,85 +353,6 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
 
     private fun stopCapture() {
         captureJob?.cancel()
-    }
-
-    private fun captureHdr() {
-        val cam = camera ?: return
-        val ic = imageCapture ?: return
-        if (captureJob != null || calibrationJob != null || rapidJob != null) return
-
-        lifecycleScope.launch {
-            binding.buttonHdr.isEnabled = false
-            binding.buttonCapture.isEnabled = false
-            binding.progressCapture.visibility = View.VISIBLE
-            try {
-                ensureSessionDb()
-
-                val expState = cam.cameraInfo.exposureState
-                if (!expState.isExposureCompensationSupported) {
-                    Toast.makeText(this@SessionActivity, "Exposure control not supported on this device", Toast.LENGTH_SHORT).show()
-                    return@launch
-                }
-                val maxIndex = expState.exposureCompensationRange.upper
-                val step = expState.exposureCompensationStep
-                val maxEv = maxIndex * step.numerator.toFloat() / step.denominator.toFloat()
-
-                val zoom = cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f
-                val ts = System.currentTimeMillis()
-                val loc = locationHelper.current ?: locationHelper.getLastKnown()
-                val bearing = if (currentBearing.isNaN()) null else currentBearing
-                val bearingAcc = if (bearingAccuracyDeg.isNaN()) null else bearingAccuracyDeg
-
-                // 0 EV (auto)
-                cam.cameraControl.setExposureCompensationIndex(0).await()
-                delay(300)
-                binding.textCaptureStatus.text = "HDR: 0 EV…"
-                shutterSound.play(MediaActionSound.SHUTTER_CLICK)
-                val f0 = File(cacheDir, "hdr_0.jpg")
-                takePicture(ic, f0)
-                val jpeg0 = f0.readBytes().also { f0.delete() }
-
-                // Max positive EV (shadow reveal)
-                cam.cameraControl.setExposureCompensationIndex(maxIndex).await()
-                delay(300)
-                binding.textCaptureStatus.text = "HDR: +%.1f EV…".format(maxEv)
-                shutterSound.play(MediaActionSound.SHUTTER_CLICK)
-                val f1 = File(cacheDir, "hdr_1.jpg")
-                takePicture(ic, f1)
-                val jpeg1 = f1.readBytes().also { f1.delete() }
-
-                cam.cameraControl.setExposureCompensationIndex(0).await()
-
-                sessionDb!!.insertShot(
-                    capturedAt = ts, lat = loc?.latitude, lon = loc?.longitude,
-                    accuracyM = loc?.accuracyM, altitudeM = loc?.altitudeM,
-                    locationSource = loc?.source, locationTimeMs = loc?.timeMs,
-                    bearingDeg = bearing, bearingAccuracyDeg = bearingAcc,
-                    zoomRatio = zoom, widePrejpeg = jpeg0,
-                    burstFrames = listOf(jpeg0), midJpeg = jpeg0, wideJpeg = jpeg0,
-                    exposureEv = 0f
-                )
-                sessionDb!!.insertShot(
-                    capturedAt = ts + 1, lat = loc?.latitude, lon = loc?.longitude,
-                    accuracyM = loc?.accuracyM, altitudeM = loc?.altitudeM,
-                    locationSource = loc?.source, locationTimeMs = loc?.timeMs,
-                    bearingDeg = bearing, bearingAccuracyDeg = bearingAcc,
-                    zoomRatio = zoom, widePrejpeg = jpeg1,
-                    burstFrames = listOf(jpeg1), midJpeg = jpeg1, wideJpeg = jpeg1,
-                    exposureEv = maxEv
-                )
-                shotCount = sessionDb!!.getShotCount()
-                binding.textShotCount.text = "Shots: $shotCount"
-            } catch (e: Exception) {
-                cam.cameraControl.setExposureCompensationIndex(0)
-                Toast.makeText(this@SessionActivity, "HDR failed: ${e.message}", Toast.LENGTH_SHORT).show()
-            } finally {
-                binding.progressCapture.visibility = View.GONE
-                binding.textCaptureStatus.text = ""
-                binding.buttonHdr.isEnabled = true
-                binding.buttonCapture.isEnabled = true
-            }
-        }
     }
 
     private suspend fun takePicture(ic: ImageCapture, file: File): Unit =
@@ -558,68 +468,6 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
         calibrationJob?.cancel()
     }
 
-    private fun startRapidFire() {
-        val cam = camera ?: return
-        val ic  = imageCapture ?: return
-        rapidCount = 0
-
-        val captureZoom = selectedZoom
-        val midZoom = 1f + (captureZoom - 1f) * 0.5f
-        val zoomCycle = listOf(1f, midZoom, captureZoom)
-
-        calibrationJob?.cancel()  // can't run both simultaneously
-
-        rapidJob = lifecycleScope.launch {
-            val savedZoom = captureZoom
-            try {
-                ensureSessionDb()
-                sessionDb!!.setMeta("session_type", "rapid_fire")
-
-                binding.buttonCapture.isEnabled = false
-                binding.buttonWideScan.isEnabled = false
-                binding.buttonRapid.setTextColor(
-                    ContextCompat.getColor(this@SessionActivity, R.color.status_error))
-
-                var idx = 0
-                while (true) {
-                    val targetZoom = zoomCycle[idx % 3]
-                    cam.cameraControl.setZoomRatio(targetZoom).await()
-
-                    val ts = System.currentTimeMillis()
-                    val f  = File(cacheDir, "rapid_tmp.jpg")
-                    shutterSound.play(MediaActionSound.SHUTTER_CLICK)
-                    takePicture(ic, f)
-                    val jpeg = f.readBytes().also { f.delete() }
-
-                    val loc = locationHelper.current ?: locationHelper.getLastKnown()
-                    sessionDb!!.insertCalibrationShot(ts, loc?.latitude, loc?.longitude, jpeg, targetZoom)
-
-                    rapidCount++
-                    binding.buttonRapid.text = "■ $rapidCount"
-
-                    idx++
-                }
-            } finally {
-                withContext(NonCancellable) {
-                    cam.cameraControl.setZoomRatio(savedZoom).await()
-                }
-                withContext(NonCancellable + Dispatchers.Main) {
-                    binding.buttonRapid.text = getString(R.string.rapid_fire)
-                    binding.buttonRapid.setTextColor(
-                        ContextCompat.getColor(this@SessionActivity, android.R.color.white))
-                    binding.buttonCapture.isEnabled = captureJob == null
-                    binding.buttonHdr.isEnabled = captureJob == null
-                    binding.buttonWideScan.isEnabled = true
-                    rapidJob = null
-                }
-            }
-        }
-    }
-
-    private fun stopRapidFire() {
-        rapidJob?.cancel()
-    }
-
     private suspend fun ensureSessionDb() {
         if (sessionDb != null) return
         val name = buildSessionName()
@@ -643,7 +491,6 @@ class SessionActivity : AppCompatActivity(), SensorEventListener {
             .setPositiveButton("Close") { _, _ ->
                 stopCapture()
                 stopCalibration()
-                stopRapidFire()
                 sessionDb?.close()
                 sessionDb = null
                 finish()

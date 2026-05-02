@@ -245,28 +245,6 @@
             android:textSize="10sp" />
 
         <Button
-            android:id="@+id/buttonRapid"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginHorizontal="2dp"
-            android:text="@string/rapid_fire"
-            android:textColor="@android:color/white"
-            android:textSize="10sp" />
-
-        <Button
-            android:id="@+id/buttonHdr"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginHorizontal="2dp"
-            android:text="@string/hdr_mode"
-            android:textColor="@android:color/white"
-            android:textSize="10sp" />
-
-        <Button
             android:id="@+id/buttonCapture"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
